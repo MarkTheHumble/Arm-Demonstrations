@@ -1,0 +1,9 @@
+source;share/colman_bringup/hook/pythonpath.ps1
+source;share/colman_bringup/hook/pythonpath.dsv
+source;share/colman_bringup/hook/pythonpath.sh
+source;share/colman_bringup/hook/ament_prefix_path.ps1
+source;share/colman_bringup/hook/ament_prefix_path.dsv
+source;share/colman_bringup/hook/ament_prefix_path.sh
+source;../../build/colman_bringup/share/colman_bringup/hook/pythonpath_develop.ps1
+source;../../build/colman_bringup/share/colman_bringup/hook/pythonpath_develop.dsv
+source;../../build/colman_bringup/share/colman_bringup/hook/pythonpath_develop.sh

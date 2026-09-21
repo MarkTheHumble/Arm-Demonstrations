@@ -1,0 +1,31 @@
+[0.369s] Invoking command in '/home/morfinm3/arm/Arm-Demonstrations/build/colman_bringup': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com PIXI_PROMPT=(Arm-Demonstrations) PYTHONPATH=/home/morfinm3/arm/Arm-Demonstrations/build/colman_bringup/prefix_override:/home/morfinm3/arm/colman/.pixi/envs/default/lib/python3.12/site-packages/colcon_core/task/python/colcon_distutils_commands:/home/morfinm3/arm/Arm-Demonstrations/install/colman_bringup/lib/python3.12/site-packages:${PYTHONPATH} /home/morfinm3/arm/colman/.pixi/envs/default/bin/python3.12 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py develop --editable --build-directory /home/morfinm3/arm/Arm-Demonstrations/build/colman_bringup/build --no-deps symlink_data
+[0.514s] running develop
+[0.609s] running egg_info
+[0.609s] creating colman_bringup.egg-info
+[0.617s] writing colman_bringup.egg-info/PKG-INFO
+[0.617s] writing dependency_links to colman_bringup.egg-info/dependency_links.txt
+[0.617s] writing requirements to colman_bringup.egg-info/requires.txt
+[0.617s] writing top-level names to colman_bringup.egg-info/top_level.txt
+[0.617s] writing manifest file 'colman_bringup.egg-info/SOURCES.txt'
+[0.634s] reading manifest file 'colman_bringup.egg-info/SOURCES.txt'
+[0.634s] writing manifest file 'colman_bringup.egg-info/SOURCES.txt'
+[0.643s] running build_ext
+[0.643s] Creating /home/morfinm3/arm/Arm-Demonstrations/install/colman_bringup/lib/python3.12/site-packages/colman-bringup.egg-link (link to .)
+[0.643s] 
+[0.643s] Installed /home/morfinm3/arm/Arm-Demonstrations/build/colman_bringup
+[0.643s] running symlink_data
+[0.643s] creating /home/morfinm3/arm/Arm-Demonstrations/install/colman_bringup/share/ament_index
+[0.643s] creating /home/morfinm3/arm/Arm-Demonstrations/install/colman_bringup/share/ament_index/resource_index
+[0.643s] creating /home/morfinm3/arm/Arm-Demonstrations/install/colman_bringup/share/ament_index/resource_index/packages
+[0.643s] symbolically linking /home/morfinm3/arm/Arm-Demonstrations/build/colman_bringup/resource/colman_bringup -> /home/morfinm3/arm/Arm-Demonstrations/install/colman_bringup/share/ament_index/resource_index/packages
+[0.643s] symbolically linking /home/morfinm3/arm/Arm-Demonstrations/build/colman_bringup/package.xml -> /home/morfinm3/arm/Arm-Demonstrations/install/colman_bringup/share/colman_bringup
+[0.644s] creating /home/morfinm3/arm/Arm-Demonstrations/install/colman_bringup/share/colman_bringup/launch
+[0.644s] symbolically linking /home/morfinm3/arm/Arm-Demonstrations/build/colman_bringup/colman_bringup/launch/rsp.launch.py -> /home/morfinm3/arm/Arm-Demonstrations/install/colman_bringup/share/colman_bringup/launch
+[0.644s] symbolically linking /home/morfinm3/arm/Arm-Demonstrations/build/colman_bringup/colman_bringup/launch/sim.launch.py -> /home/morfinm3/arm/Arm-Demonstrations/install/colman_bringup/share/colman_bringup/launch
+[0.644s] symbolically linking /home/morfinm3/arm/Arm-Demonstrations/build/colman_bringup/colman_bringup/launch/yolo.launch.py -> /home/morfinm3/arm/Arm-Demonstrations/install/colman_bringup/share/colman_bringup/launch
+[0.644s] symbolically linking /home/morfinm3/arm/Arm-Demonstrations/build/colman_bringup/colman_bringup/launch/bringup.launch.py -> /home/morfinm3/arm/Arm-Demonstrations/install/colman_bringup/share/colman_bringup/launch
+[0.644s] symbolically linking /home/morfinm3/arm/Arm-Demonstrations/build/colman_bringup/colman_bringup/launch/apriltag.launch.py -> /home/morfinm3/arm/Arm-Demonstrations/install/colman_bringup/share/colman_bringup/launch
+[0.644s] symbolically linking /home/morfinm3/arm/Arm-Demonstrations/build/colman_bringup/colman_bringup/launch/moveit.launch.py -> /home/morfinm3/arm/Arm-Demonstrations/install/colman_bringup/share/colman_bringup/launch
+[0.644s] symbolically linking /home/morfinm3/arm/Arm-Demonstrations/build/colman_bringup/colman_bringup/launch/depth.launch.py -> /home/morfinm3/arm/Arm-Demonstrations/install/colman_bringup/share/colman_bringup/launch
+[0.644s] symbolically linking /home/morfinm3/arm/Arm-Demonstrations/build/colman_bringup/colman_bringup/launch/colman.launch.py -> /home/morfinm3/arm/Arm-Demonstrations/install/colman_bringup/share/colman_bringup/launch
+[0.658s] Invoked command in '/home/morfinm3/arm/Arm-Demonstrations/build/colman_bringup' returned '0': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com PIXI_PROMPT=(Arm-Demonstrations) PYTHONPATH=/home/morfinm3/arm/Arm-Demonstrations/build/colman_bringup/prefix_override:/home/morfinm3/arm/colman/.pixi/envs/default/lib/python3.12/site-packages/colcon_core/task/python/colcon_distutils_commands:/home/morfinm3/arm/Arm-Demonstrations/install/colman_bringup/lib/python3.12/site-packages:${PYTHONPATH} /home/morfinm3/arm/colman/.pixi/envs/default/bin/python3.12 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py develop --editable --build-directory /home/morfinm3/arm/Arm-Demonstrations/build/colman_bringup/build --no-deps symlink_data

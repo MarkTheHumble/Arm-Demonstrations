@@ -1,0 +1,51 @@
+[workspace]
+authors = ["Mark morfin <moneybobbey@gmail.com>"]
+channels = ["robostack-jazzy", "https://prefix.dev/pierce-colman", "conda-forge"]
+name = "Arm-Demonstrations"
+platforms = ["linux-64"]
+version = "0.1.0"
+
+[system-requirements]
+linux = "6.8.0"
+libc = { family = "glibc", version = "2.39" }
+
+[activation]
+scripts = ["install/setup.sh"]
+
+[tasks]
+lan = "ros2 launch ur_robot_driver ur_control.launch.py ur_type:=ur3e robot_ip:=192.168.56.101 headless_mode:=true use_camera:=true description_launchfile:=$(ros2 pkg prefix colman_bringup)/share/colman_bringup/launch/rsp.launch.py"
+build = "colcon build --symlink-install"
+
+[dependencies]
+colcon-common-extensions = ">=0.3.0,<0.4"
+filelock = ">=3.20.0,<4"
+setuptools = "<=70.8.0"
+ros-jazzy-desktop = ">=0.11.0,<0.12"
+ros-jazzy-xacro = ">=2.0.11,<3"
+ros-jazzy-ur-description = ">=3.0.1,<4"
+ros-jazzy-robotiq-description = ">=0.0.1,<0.0.2"
+ros-jazzy-gz-sim-vendor = ">=0.0.9,<0.0.10"
+ros-jazzy-ros-gz = ">=1.0.16,<2"
+ros-jazzy-ros2-control = ">=4.33.0,<5"
+ros-jazzy-moveit = ">=2.12.3,<3"
+make = ">=4.4.1,<5"
+compilers = ">=1.11.0,<2"
+ros-jazzy-gz-ros2-control = ">=1.2.14,<2"
+ros-jazzy-ros2-controllers = ">=4.28.0,<5"
+ros-jazzy-rqt-graph = ">=1.5.4,<2"
+ros-jazzy-rqt-image-view = ">=1.3.0,<2"
+ros-jazzy-image-pipeline = ">=5.0.11,<6"
+ros-jazzy-pcl-ros = ">=2.6.2,<3"
+ros-jazzy-apriltag = ">=3.4.3,<4"
+ros-jazzy-apriltag-ros = ">=3.2.2,<4"
+ros-jazzy-moveit-py = ">=2.12.3,<3"
+git-lfs = ">=3.7.1,<4"
+ros-jazzy-trac-ik-lib = "*"
+ros-jazzy-trac-ik-kinematics-plugin = "*"
+ruff = ">=0.15.4,<0.16"
+ros-jazzy-ur-robot-driver = ">=3.7.0,<4"
+semver = ">=3.0.4,<4"
+
+[pypi-dependencies]
+ultralytics = ">=8.4.11, <9"
+depthai = ">=2.24"
