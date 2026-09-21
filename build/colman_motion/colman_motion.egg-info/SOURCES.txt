@@ -1,0 +1,17 @@
+package.xml
+setup.cfg
+setup.py
+colman_motion/__init__.py
+colman_motion/arm_control.py
+colman_motion/checkers.launch.py
+colman_motion/checkers.py
+colman_motion/scene_manager.py
+colman_motion/vacuum_control.py
+colman_motion.egg-info/PKG-INFO
+colman_motion.egg-info/SOURCES.txt
+colman_motion.egg-info/dependency_links.txt
+colman_motion.egg-info/entry_points.txt
+colman_motion.egg-info/requires.txt
+colman_motion.egg-info/top_level.txt
+colman_motion.egg-info/zip-safe
+resource/colman_motion

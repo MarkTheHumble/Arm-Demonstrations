@@ -1,0 +1,24 @@
+running develop
+running egg_info
+creating colman_motion.egg-info
+writing colman_motion.egg-info/PKG-INFO
+writing dependency_links to colman_motion.egg-info/dependency_links.txt
+writing entry points to colman_motion.egg-info/entry_points.txt
+writing requirements to colman_motion.egg-info/requires.txt
+writing top-level names to colman_motion.egg-info/top_level.txt
+writing manifest file 'colman_motion.egg-info/SOURCES.txt'
+reading manifest file 'colman_motion.egg-info/SOURCES.txt'
+writing manifest file 'colman_motion.egg-info/SOURCES.txt'
+running build_ext
+Creating /home/morfinm3/arm/Arm-Demonstrations/install/colman_motion/lib/python3.12/site-packages/colman-motion.egg-link (link to .)
+Installing checkers script to /home/morfinm3/arm/Arm-Demonstrations/install/colman_motion/lib/colman_motion
+
+Installed /home/morfinm3/arm/Arm-Demonstrations/build/colman_motion
+running symlink_data
+creating /home/morfinm3/arm/Arm-Demonstrations/install/colman_motion/share/ament_index
+creating /home/morfinm3/arm/Arm-Demonstrations/install/colman_motion/share/ament_index/resource_index
+creating /home/morfinm3/arm/Arm-Demonstrations/install/colman_motion/share/ament_index/resource_index/packages
+symbolically linking /home/morfinm3/arm/Arm-Demonstrations/build/colman_motion/resource/colman_motion -> /home/morfinm3/arm/Arm-Demonstrations/install/colman_motion/share/ament_index/resource_index/packages
+symbolically linking /home/morfinm3/arm/Arm-Demonstrations/build/colman_motion/package.xml -> /home/morfinm3/arm/Arm-Demonstrations/install/colman_motion/share/colman_motion
+creating /home/morfinm3/arm/Arm-Demonstrations/install/colman_motion/share/colman_motion/launch
+symbolically linking /home/morfinm3/arm/Arm-Demonstrations/build/colman_motion/colman_motion/checkers.launch.py -> /home/morfinm3/arm/Arm-Demonstrations/install/colman_motion/share/colman_motion/launch

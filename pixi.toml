@@ -14,6 +14,7 @@ scripts = ["install/setup.sh"]
 
 [tasks]
 lan = "ros2 launch ur_robot_driver ur_control.launch.py ur_type:=ur3e robot_ip:=192.168.56.101 headless_mode:=true use_camera:=true description_launchfile:=$(ros2 pkg prefix colman_bringup)/share/colman_bringup/launch/rsp.launch.py"
+checkers = "ros2 launch colman_motion checkers.launch.py gripper_type:=vacuum"
 build = "colcon build --symlink-install"
 
 [dependencies]

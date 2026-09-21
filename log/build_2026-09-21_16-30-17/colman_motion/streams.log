@@ -1,0 +1,26 @@
+[0.655s] Invoking command in '/home/morfinm3/arm/Arm-Demonstrations/build/colman_motion': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com PIXI_PROMPT=(Arm-Demonstrations) PYTHONPATH=/home/morfinm3/arm/Arm-Demonstrations/build/colman_motion/prefix_override:/home/morfinm3/arm/Arm-Demonstrations/.pixi/envs/default/lib/python3.12/site-packages/colcon_core/task/python/colcon_distutils_commands:/home/morfinm3/arm/Arm-Demonstrations/install/colman_motion/lib/python3.12/site-packages:${PYTHONPATH} /home/morfinm3/arm/Arm-Demonstrations/.pixi/envs/default/bin/python3.12 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py develop --editable --build-directory /home/morfinm3/arm/Arm-Demonstrations/build/colman_motion/build --no-deps symlink_data
+[0.807s] running develop
+[0.915s] running egg_info
+[0.915s] creating colman_motion.egg-info
+[0.928s] writing colman_motion.egg-info/PKG-INFO
+[0.928s] writing dependency_links to colman_motion.egg-info/dependency_links.txt
+[0.928s] writing entry points to colman_motion.egg-info/entry_points.txt
+[0.928s] writing requirements to colman_motion.egg-info/requires.txt
+[0.929s] writing top-level names to colman_motion.egg-info/top_level.txt
+[0.929s] writing manifest file 'colman_motion.egg-info/SOURCES.txt'
+[0.948s] reading manifest file 'colman_motion.egg-info/SOURCES.txt'
+[0.948s] writing manifest file 'colman_motion.egg-info/SOURCES.txt'
+[0.958s] running build_ext
+[0.959s] Creating /home/morfinm3/arm/Arm-Demonstrations/install/colman_motion/lib/python3.12/site-packages/colman-motion.egg-link (link to .)
+[0.959s] Installing checkers script to /home/morfinm3/arm/Arm-Demonstrations/install/colman_motion/lib/colman_motion
+[0.959s] 
+[0.959s] Installed /home/morfinm3/arm/Arm-Demonstrations/build/colman_motion
+[0.960s] running symlink_data
+[0.960s] creating /home/morfinm3/arm/Arm-Demonstrations/install/colman_motion/share/ament_index
+[0.960s] creating /home/morfinm3/arm/Arm-Demonstrations/install/colman_motion/share/ament_index/resource_index
+[0.960s] creating /home/morfinm3/arm/Arm-Demonstrations/install/colman_motion/share/ament_index/resource_index/packages
+[0.960s] symbolically linking /home/morfinm3/arm/Arm-Demonstrations/build/colman_motion/resource/colman_motion -> /home/morfinm3/arm/Arm-Demonstrations/install/colman_motion/share/ament_index/resource_index/packages
+[0.960s] symbolically linking /home/morfinm3/arm/Arm-Demonstrations/build/colman_motion/package.xml -> /home/morfinm3/arm/Arm-Demonstrations/install/colman_motion/share/colman_motion
+[0.960s] creating /home/morfinm3/arm/Arm-Demonstrations/install/colman_motion/share/colman_motion/launch
+[0.961s] symbolically linking /home/morfinm3/arm/Arm-Demonstrations/build/colman_motion/colman_motion/checkers.launch.py -> /home/morfinm3/arm/Arm-Demonstrations/install/colman_motion/share/colman_motion/launch
+[0.974s] Invoked command in '/home/morfinm3/arm/Arm-Demonstrations/build/colman_motion' returned '0': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com PIXI_PROMPT=(Arm-Demonstrations) PYTHONPATH=/home/morfinm3/arm/Arm-Demonstrations/build/colman_motion/prefix_override:/home/morfinm3/arm/Arm-Demonstrations/.pixi/envs/default/lib/python3.12/site-packages/colcon_core/task/python/colcon_distutils_commands:/home/morfinm3/arm/Arm-Demonstrations/install/colman_motion/lib/python3.12/site-packages:${PYTHONPATH} /home/morfinm3/arm/Arm-Demonstrations/.pixi/envs/default/bin/python3.12 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py develop --editable --build-directory /home/morfinm3/arm/Arm-Demonstrations/build/colman_motion/build --no-deps symlink_data
