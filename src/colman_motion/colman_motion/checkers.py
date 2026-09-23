@@ -46,10 +46,12 @@ playerColor = "pink"
 armColor = "blue"
 settingUp = True
 playerTurn = False
+extraPlayerTurn = False
 rawPieces = []
 playerPieces = []
 armPieces = []
 armTurn = False
+extraArmTurn = False
 launchTime = time.time()
 lastCheck = time.time()
 botCorner = (0,0)
@@ -194,7 +196,6 @@ def armPlay():
         # basic left point
         if armPieces[i].col > 1 and armPieces[i].row < 6:
             if board[armPieces[i].row + 2][armPieces[i].col - 2] == '_' and board[armPieces[i].row + 1][armPieces[i].col - 1] != '_':
-                type(Piece)
                 if board[armPieces[i].row + 1][armPieces[i].col - 1].team == True:
                     legalArmMoves.append((i, armPieces[i].row, armPieces[i].col, (armPieces[i].row + 2), (armPieces[i].col - 2), True))
 
@@ -248,7 +249,7 @@ def armPlay():
         board[chosenMove[1]][chosenMove[2]] = '_'
         board[chosenMove[3]][chosenMove[4]] = armPieces[chosenMove[0]]
 
-
+        # if the move was aggressive enough to remove a player piece
         if chosenMove[5] == True:
             deleteRow = int((chosenMove[1] + chosenMove[3]) / 2)
             deleteCol = int((chosenMove[2] + chosenMove[4]) / 2)
@@ -259,6 +260,10 @@ def armPlay():
                     break
             board[deleteRow][deleteCol] = '_'
 
+        # if resulting row was the top row
+        if chosenMove[3] == 7:
+            armPieces[chosenMove[0]].king = True
+
         print(legalArmMoves,flush=True)
         print(f"Chosen move: {chosenMove}",flush=True)
         printBoard()
@@ -267,9 +272,40 @@ def armPlay():
     armTurn = False
     playerTurn = True
 
+def playerMovesAgain(contours):
+
+    global board, playerPieces, armPieces, botCorner, topCorner, playerTurn, armTurn, extraPlayerTurn
+
+    legalExtraPlayerMoves = []
+    # index, initial row, initial col, new row, new col, does it earn a point
+
+    index = extraPlayerTurn
+
+    # basic left point
+    if playerPieces[index].col > 1 and playerPieces[index].row > 1:
+        if board[playerPieces[index].row - 2][playerPieces[index].col - 2] == '_' and board[playerPieces[index].row - 1][playerPieces[index].col - 1] != '_':
+            if board[playerPieces[index].row - 1][playerPieces[index].col - 1].team == True:
+                legalExtraPlayerMoves.append((index, playerPieces[index].row, playerPieces[index].col, (playerPieces[index].row - 2), (playerPieces[index].col - 2), True))
+
+
+    # basic right point
+    if playerPieces[index].col < 4 and playerPieces[index].row > 1:
+        if board[playerPieces[index].row - 2][playerPieces[index].col + 2] == '_' and board[playerPieces[index].row - 1][playerPieces[index].col + 1] != '_':
+            if board[playerPieces[index].row - 1][playerPieces[index].col + 1].team == True:
+                legalExtraPlayerMoves.append((index, playerPieces[index].row, playerPieces[index].col, (playerPieces[index].row - 2), (playerPieces[index].col + 2), True))
+
+    # come back and finish this later
+
+
+    # early exit if not additional move can be made
+    if len(legalExtraPlayerMoves) == 0:
+        extraPlayerTurn = False
+        armTurn = True
+        return
+
 def checkPlayerMovement(contours):
 
-    global board, playerPieces, armPieces, botCorner, topCorner, playerTurn, armTurn
+    global board, playerPieces, armPieces, botCorner, topCorner, playerTurn, armTurn, extraPlayerTurn
 
     amountFound = 0
     piecesFound = [False] * len(playerPieces)
@@ -277,6 +313,7 @@ def checkPlayerMovement(contours):
     potentialX = 0
     potentialY = 0
     legalMove = False
+    point = False
     for cnt in contours:
         found = False
         area = cv2.contourArea(cnt)
@@ -326,23 +363,10 @@ def checkPlayerMovement(contours):
                         # player killed arm piece downward left
                         if legalMove == False and playerPieces[foundIndex].row == i + 2 and playerPieces[foundIndex].col == j - 2 and board[i+1][j-1].team == False:
                             legalMove = True
-                            for k in range(len(armPieces)):
-                                if armPieces[k].row == i+1 and armPieces[k].col == j-1:
-                                    del armPieces[k]
-                                    break
-                            board[i+1][j-1] = '_'
 
                         # player killed arm piece downward right
                         if legalMove == False and playerPieces[foundIndex].row == i + 2 and playerPieces[foundIndex].col == j + 2 and board[i+1][j+1].team == False:
                             legalMove = True
-                            for k in range(len(armPieces)):
-                                if armPieces[k].row == i+1 and armPieces[k].col == j+1:
-                                    del armPieces[k]
-                                    break
-                            board[i+1][j+1] = '_'
-
-                        # double jumps downwards
-                        # come back to this and keep indexes from going out of bounds during if statements
 
 
                         # royal moves
@@ -356,16 +380,37 @@ def checkPlayerMovement(contours):
 
 
                     if legalMove == True:
-                        armTurn = True
-                        playerTurn = False
+
+                        # if the player took out an arm piece
+                        if abs(playerPieces[foundIndex].row - i) > 1:
+                            deleteRow = int((playerPieces[foundIndex].row + i) / 2)
+                            deleteCol = int((playerPieces[foundIndex].col + j) / 2)
+                            for k in range(len(armPieces)):
+                                if armPieces[k].row == deleteRow and armPieces[k].col == deleteCol:
+                                    del armPieces[k]
+                                    break
+                            board[deleteRow][deleteCol] = '_'
+                            point = True
+
+                        # mark previous spot as blank
                         board[playerPieces[foundIndex].row][playerPieces[foundIndex].col] = '_'
+                        # update current row and col for the piece itself
                         playerPieces[foundIndex].row = i
                         playerPieces[foundIndex].col = j
+                        # update x and y to match center of the square
                         playerPieces[foundIndex].x = playableAreas[i][j][0]
                         playerPieces[foundIndex].y = playableAreas[i][j][1]
+                        # have the piece appear in the correct spot on the board array
                         board[i][j] = playerPieces[foundIndex]
                         print(f"player moved to {i},{j}",flush=True)
                         printBoard()
+                        if point == True:
+                            # switch these two as comments to come back later
+                            extraPlayerTurn = foundIndex
+                            # armTurn = True
+                        else:
+                            armTurn = True
+                        playerTurn = False
                         break
                         # add a second check for kings moving upwards
             if legalMove == True:
@@ -469,20 +514,23 @@ def createBoard(cX, cY):
 
 
 def track_color(mask, label, bgr_color):
-    global settingUp, launchTime, botCorner, topCorner, lastCheck, playerColor
+    global settingUp, launchTime, botCorner, topCorner, lastCheck, playerColor, extraPlayerTurn
 
     contours, _ = cv2.findContours(
         mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
     )
 
     # occassionally check if the player made a move and then do the proper updates
-    if time.time() - lastCheck > 0.8 and playerTurn == True and label == playerColor:
+    if time.time() - lastCheck > 0.5 and playerTurn == True and label == playerColor:
         checkPlayerMovement(contours)
         lastCheck = time.time()
 
+    if time.time() - lastCheck > 0.1 and extraPlayerTurn != False and label == playerColor:
+        playerMovesAgain(contours)
+        lastCheck = time.time()
 
-    if time.time() - lastCheck > 0.8 and armTurn == True:
-        print("Arm turn lolgic here",flush=True)
+
+    if time.time() - lastCheck > 0.5 and armTurn == True:
         armPlay()
         lastCheck = time.time()
 
