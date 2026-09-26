@@ -46,7 +46,7 @@ playerColor = "pink"
 armColor = "blue"
 settingUp = True
 playerTurn = False
-extraPlayerTurn = False
+extraPlayerTurnIndex = None
 rawPieces = []
 playerPieces = []
 armPieces = []
@@ -197,14 +197,18 @@ def armPlay():
         if armPieces[i].col > 1 and armPieces[i].row < 6:
             if board[armPieces[i].row + 2][armPieces[i].col - 2] == '_' and board[armPieces[i].row + 1][armPieces[i].col - 1] != '_':
                 if board[armPieces[i].row + 1][armPieces[i].col - 1].team == True:
+                    legalArmMoves.clear()
                     legalArmMoves.append((i, armPieces[i].row, armPieces[i].col, (armPieces[i].row + 2), (armPieces[i].col - 2), True))
+                    break
 
 
         # basic right point
         if armPieces[i].col < 4 and armPieces[i].row < 6:
             if board[armPieces[i].row + 2][armPieces[i].col + 2] == '_' and board[armPieces[i].row + 1][armPieces[i].col + 1] != '_':
                 if board[armPieces[i].row + 1][armPieces[i].col + 1].team == True:
+                    legalArmMoves.clear()
                     legalArmMoves.append((i, armPieces[i].row, armPieces[i].col, (armPieces[i].row + 2), (armPieces[i].col + 2), True))
+                    break
 
 
         # king exclusive moves
@@ -225,14 +229,18 @@ def armPlay():
             if armPieces[i].col > 1 and armPieces[i].row > 1:
                 if board[armPieces[i].row - 2][armPieces[i].col - 2] == '_' and board[armPieces[i].row - 1][armPieces[i].col - 1] != '_':
                     if board[armPieces[i].row - 1][armPieces[i].col - 1].team == True:
+                        legalArmMoves.clear()
                         legalArmMoves.append((i, armPieces[i].row, armPieces[i].col, (armPieces[i].row - 2), (armPieces[i].col - 2), True))
+                        break
 
 
             # king right point
             if armPieces[i].col < 4 and armPieces[i].row > 1:
                 if board[armPieces[i].row - 2][armPieces[i].col + 2] == '_' and board[armPieces[i].row - 1][armPieces[i].col + 1] != '_':
                     if board[armPieces[i].row - 1][armPieces[i].col + 1].team == True:
+                        legalArmMoves.clear()
                         legalArmMoves.append((i, armPieces[i].row, armPieces[i].col, (armPieces[i].row - 2), (armPieces[i].col + 2), True))
+                        break
 
 
     # add physical moves and delete logic here
@@ -274,38 +282,85 @@ def armPlay():
 
 def playerMovesAgain(contours):
 
-    global board, playerPieces, armPieces, botCorner, topCorner, playerTurn, armTurn, extraPlayerTurn
+    global board, playerPieces, armPieces, botCorner, topCorner, playerTurn, armTurn, extraPlayerTurnIndex
 
     legalExtraPlayerMoves = []
     # index, initial row, initial col, new row, new col, does it earn a point
 
-    index = extraPlayerTurn
+    index = extraPlayerTurnIndex
 
     # basic left point
     if playerPieces[index].col > 1 and playerPieces[index].row > 1:
         if board[playerPieces[index].row - 2][playerPieces[index].col - 2] == '_' and board[playerPieces[index].row - 1][playerPieces[index].col - 1] != '_':
-            if board[playerPieces[index].row - 1][playerPieces[index].col - 1].team == True:
+            if board[playerPieces[index].row - 1][playerPieces[index].col - 1].team == False:
                 legalExtraPlayerMoves.append((index, playerPieces[index].row, playerPieces[index].col, (playerPieces[index].row - 2), (playerPieces[index].col - 2), True))
 
 
     # basic right point
     if playerPieces[index].col < 4 and playerPieces[index].row > 1:
         if board[playerPieces[index].row - 2][playerPieces[index].col + 2] == '_' and board[playerPieces[index].row - 1][playerPieces[index].col + 1] != '_':
-            if board[playerPieces[index].row - 1][playerPieces[index].col + 1].team == True:
+            if board[playerPieces[index].row - 1][playerPieces[index].col + 1].team == False:
                 legalExtraPlayerMoves.append((index, playerPieces[index].row, playerPieces[index].col, (playerPieces[index].row - 2), (playerPieces[index].col + 2), True))
 
-    # come back and finish this later
+    if playerPieces[index].king == True:
+
+        # king left point
+        if playerPieces[index].col > 1 and playerPieces[index].row > 1:
+            if board[playerPieces[index].row + 2][playerPieces[index].col - 2] == '_' and board[playerPieces[index].row + 1][playerPieces[index].col - 1] != '_':
+                if board[playerPieces[index].row + 1][playerPieces[index].col - 1].team == False:
+                    legalExtraPlayerMoves.append((index, playerPieces[index].row, playerPieces[index].col, (playerPieces[index].row + 2), (playerPieces[index].col - 2), True))
+        # king right point
+        if playerPieces[index].col < 4 and playerPieces[index].row > 1:
+            if board[playerPieces[index].row + 2][playerPieces[index].col + 2] == '_' and board[playerPieces[index].row + 1][playerPieces[index].col + 1] != '_':
+                if board[playerPieces[index].row + 1][playerPieces[index].col + 1].team == False:
+                    legalExtraPlayerMoves.append((index, playerPieces[index].row, playerPieces[index].col, (playerPieces[index].row + 2), (playerPieces[index].col + 2), True))
 
 
-    # early exit if not additional move can be made
+
+    # exit if no additional move can be made
     if len(legalExtraPlayerMoves) == 0:
-        extraPlayerTurn = False
+        extraPlayerTurnIndex = None
         armTurn = True
         return
 
+    print(legalExtraPlayerMoves)
+    print("MORE MOVES CAN BE MADE BY THE PLAYER",flush=True)
+
+    for cnt in contours:
+        area = cv2.contourArea(cnt)
+        if area > 400:  # ignore tiny noise
+            x, y, w, h = cv2.boundingRect(cnt)
+            cX, cY = x + int(w / 2), y + int(h / 2)
+
+            # untested
+            # check every contour x y against the x and y of playable area at the row and col of the potential extra move
+            for i in range(len(legalExtraPlayerMoves)):
+                if abs(cX - playableAreas[legalExtraPlayerMoves[i][3]][legalExtraPlayerMoves[i][4]][0]) < 30 and abs(cY - playableAreas[legalExtraPlayerMoves[i][3]][legalExtraPlayerMoves[i][4]][1]) < 30:
+                    # delete arm piece
+                    deleteRow = int(legalExtraPlayerMoves[i][1] + legalExtraPlayerMoves[i][3] / 2)
+                    deleteCol = int(legalExtraPlayerMoves[i][2] + legalExtraPlayerMoves[i][4] / 2)
+                    for k in range(len(armPieces)):
+                        if armPieces[k].row == deleteRow and armPieces[k].col == deleteCol:
+                            del armPieces[k]
+                            break
+                    
+                    # update board spot old
+                    board[playerPieces[index].row][playerPieces[index].col] = '_'
+                    playerPieces[index].row = legalExtraPlayerMoves[i][3]
+                    playerPieces[index].col = legalExtraPlayerMoves[i][4]
+                    
+                    # update board spot dead
+                    board[deleteRow][deleteCol] = '_'
+
+                    # update board spot new
+                    board[playerPieces[index].row][playerPieces[index].col] = playerPieces[index]
+
+                    
+
+
 def checkPlayerMovement(contours):
 
-    global board, playerPieces, armPieces, botCorner, topCorner, playerTurn, armTurn, extraPlayerTurn
+    global board, playerPieces, armPieces, botCorner, topCorner, playerTurn, armTurn, extraPlayerTurnIndex
 
     amountFound = 0
     piecesFound = [False] * len(playerPieces)
@@ -405,9 +460,7 @@ def checkPlayerMovement(contours):
                         print(f"player moved to {i},{j}",flush=True)
                         printBoard()
                         if point == True:
-                            # switch these two as comments to come back later
-                            extraPlayerTurn = foundIndex
-                            # armTurn = True
+                            extraPlayerTurnIndex = foundIndex
                         else:
                             armTurn = True
                         playerTurn = False
@@ -514,7 +567,7 @@ def createBoard(cX, cY):
 
 
 def track_color(mask, label, bgr_color):
-    global settingUp, launchTime, botCorner, topCorner, lastCheck, playerColor, extraPlayerTurn
+    global settingUp, launchTime, botCorner, topCorner, lastCheck, playerColor, extraPlayerTurnIndex
 
     contours, _ = cv2.findContours(
         mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
@@ -525,7 +578,7 @@ def track_color(mask, label, bgr_color):
         checkPlayerMovement(contours)
         lastCheck = time.time()
 
-    if time.time() - lastCheck > 0.1 and extraPlayerTurn != False and label == playerColor:
+    if time.time() - lastCheck > 0.1 and extraPlayerTurnIndex != None and label == playerColor:
         playerMovesAgain(contours)
         lastCheck = time.time()
 
