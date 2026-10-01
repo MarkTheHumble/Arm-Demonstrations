@@ -6,21 +6,21 @@ This branch currently just has checkers as an option. Other games could possibly
 
 ### 1. Clone this repository 
 
-'''
+```
 git clone https://github.com/MarkTheHumble/Arm-Demonstrations.git
-'''
+```
 
 ### 2. Install pixi if pixi is not installed on your machine
 
-'''
+```
 curl -fsSL https://pixi.sh/install.sh | sh
-'''
+```
 
 ### 3. Build the project
 
-'''
+```
 pixi run build
-'''
+```
 
 ### 4. Power the robot arm
 
@@ -45,9 +45,9 @@ There is a tiny red lever on the side of the tank that powers the air tank. Flip
 
 ### 9. Start communicating with the arm
 
-'''
+```
 pixi run lan
-'''  
+```  
 
 You should see RViz appear. If the arm on your screen is in a different position than the robot you're trying to communicate with, something is wrong. Check that the ethernet cable is fully inserted and at least occasionally blinking. Check that the network you're connected to is the network for the arm and not the internet connection for the lab. Check that the tablet for the arm is set to "remote" control instead of "local". The ethernet cable is currently being held together by tape as of October 2026, so that could also be a point of failiure soon.
 
@@ -56,9 +56,9 @@ You should see RViz appear. If the arm on your screen is in a different position
 
 inside of a different shell, with the shell that performed "pixi run lan" still running,
 
-'''
+```
 pixi run checkers
-'''
+```
 
 Spend the first 6.5 seconds of the game aligning the 8x6 board with the temporary red lines that should be going through the vertical and horizontal centers of the checkers board. The game is currently expecting blue pieces on the arm side and pink pieces on the players side.
 
