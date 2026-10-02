@@ -47,11 +47,11 @@ armColor = "blue"
 settingUp = True
 playerTurn = False
 extraPlayerTurnIndex = None
+extraArmTurnIndex = None
 rawPieces = []
 playerPieces = []
 armPieces = []
 armTurn = False
-extraArmTurn = False
 launchTime = time.time()
 lastCheck = time.time()
 botCorner = (0,0)
@@ -171,10 +171,84 @@ def movePiece(initalRow, initialCol, endRow, endCol):
     arm.go_to_joint_pose(PRE_CAMERA_POSITION, veryFast)
     arm.go_to_joint_pose(CAMERA_POSITION, verySlow)
 
+def armPlaysAgain():
+
+    global board, playerPieces, playableAreas, armPieces, botCorner, topCorner, playerTurn, armTurn, extraArmTurnIndex
+
+    i = extraArmTurnIndex
+    legalArmMoves = []
+
+    # basic left point
+    if armPieces[i].col > 1 and armPieces[i].row < 6:
+        if board[armPieces[i].row + 2][armPieces[i].col - 2] == '_' and board[armPieces[i].row + 1][armPieces[i].col - 1] != '_':
+            if board[armPieces[i].row + 1][armPieces[i].col - 1].team == True:
+                legalArmMoves.append((i, armPieces[i].row, armPieces[i].col, (armPieces[i].row + 2), (armPieces[i].col - 2), True))
+
+
+    # basic right point
+    if armPieces[i].col < 4 and armPieces[i].row < 6:
+        if board[armPieces[i].row + 2][armPieces[i].col + 2] == '_' and board[armPieces[i].row + 1][armPieces[i].col + 1] != '_':
+            if board[armPieces[i].row + 1][armPieces[i].col + 1].team == True:
+                legalArmMoves.append((i, armPieces[i].row, armPieces[i].col, (armPieces[i].row + 2), (armPieces[i].col + 2), True))
+
+
+    # king exclusive moves
+    if armPieces[i].king == True:
+
+        # king left point
+        if armPieces[i].col > 1 and armPieces[i].row > 1:
+            if board[armPieces[i].row - 2][armPieces[i].col - 2] == '_' and board[armPieces[i].row - 1][armPieces[i].col - 1] != '_':
+                if board[armPieces[i].row - 1][armPieces[i].col - 1].team == True:
+                    legalArmMoves.append((i, armPieces[i].row, armPieces[i].col, (armPieces[i].row - 2), (armPieces[i].col - 2), True))
+
+
+        # king right point
+        if armPieces[i].col < 4 and armPieces[i].row > 1:
+            if board[armPieces[i].row - 2][armPieces[i].col + 2] == '_' and board[armPieces[i].row - 1][armPieces[i].col + 1] != '_':
+                if board[armPieces[i].row - 1][armPieces[i].col + 1].team == True:
+                    legalArmMoves.append((i, armPieces[i].row, armPieces[i].col, (armPieces[i].row - 2), (armPieces[i].col + 2), True))
+
+
+
+    if len(legalArmMoves) == 0:
+        extraArmTurnIndex = None
+        playerTurn = True
+        return
+
+    chosenMove = legalArmMoves[random.randrange(len(legalArmMoves))]
+    
+    movePiece(chosenMove[1], chosenMove[2], chosenMove[3], chosenMove[4])
+
+    armPieces[chosenMove[0]].row = chosenMove[3]
+    armPieces[chosenMove[0]].col = chosenMove[4]
+    armPieces[chosenMove[0]].x = playableAreas[chosenMove[3]][chosenMove[4]][0]
+    armPieces[chosenMove[0]].y = playableAreas[chosenMove[3]][chosenMove[4]][1]
+    board[chosenMove[1]][chosenMove[2]] = '_'
+    board[chosenMove[3]][chosenMove[4]] = armPieces[chosenMove[0]]
+
+
+    deleteRow = int((chosenMove[1] + chosenMove[3]) / 2)
+    deleteCol = int((chosenMove[2] + chosenMove[4]) / 2)
+
+    for j in range(len(playerPieces)):
+        if playerPieces[j].row == deleteRow and playerPieces[j].col == deleteCol:
+            del playerPieces[j]
+            break
+    board[deleteRow][deleteCol] = '_'
+    extraArmTurnIndex = chosenMove[0]
+
+    # if resulting row was the top row
+    if chosenMove[3] == 7:
+        armPieces[chosenMove[0]].king = True
+
+    print(legalArmMoves,flush=True)
+    print(f"Chosen move: {chosenMove}",flush=True)
+    printBoard()
+
 
 def armPlay():
 
-    global board, playerPieces, playableAreas, armPieces, botCorner, topCorner, playerTurn, armTurn
+    global board, playerPieces, playableAreas, armPieces, botCorner, topCorner, playerTurn, armTurn, extraArmTurnIndex
 
     # save in this format to make things easier later
     # index of armPiece, initial row, initial col, result row, result col, boolean for if the move removes a player piece
@@ -185,8 +259,7 @@ def armPlay():
         if armPieces[i].col > 0 and armPieces[i].row < 7:
             if board[armPieces[i].row + 1][armPieces[i].col - 1] == '_':
                 legalArmMoves.append((i, armPieces[i].row, armPieces[i].col, (armPieces[i].row + 1), (armPieces[i].col - 1), False))
-
-        # new work 
+ 
         # if you can look right
         if armPieces[i].col < 5 and armPieces[i].row < 7:
             if board[armPieces[i].row + 1][armPieces[i].col + 1] == '_':
@@ -267,18 +340,25 @@ def armPlay():
                     del playerPieces[i]
                     break
             board[deleteRow][deleteCol] = '_'
+            extraArmTurnIndex = chosenMove[0]
+        else:
+            playerTurn = True
 
         # if resulting row was the top row
         if chosenMove[3] == 7:
             armPieces[chosenMove[0]].king = True
+
+        armTurn = False
 
         print(legalArmMoves,flush=True)
         print(f"Chosen move: {chosenMove}",flush=True)
         printBoard()
 
 
-    armTurn = False
-    playerTurn = True
+
+    else:
+        armTurn = False
+        playerTurn = True
 
 def playerMovesAgain(contours):
 
@@ -337,8 +417,8 @@ def playerMovesAgain(contours):
             for i in range(len(legalExtraPlayerMoves)):
                 if abs(cX - playableAreas[legalExtraPlayerMoves[i][3]][legalExtraPlayerMoves[i][4]][0]) < 30 and abs(cY - playableAreas[legalExtraPlayerMoves[i][3]][legalExtraPlayerMoves[i][4]][1]) < 30:
                     # delete arm piece
-                    deleteRow = int(legalExtraPlayerMoves[i][1] + legalExtraPlayerMoves[i][3] / 2)
-                    deleteCol = int(legalExtraPlayerMoves[i][2] + legalExtraPlayerMoves[i][4] / 2)
+                    deleteRow = int((legalExtraPlayerMoves[i][1] + legalExtraPlayerMoves[i][3]) / 2)
+                    deleteCol = int((legalExtraPlayerMoves[i][2] + legalExtraPlayerMoves[i][4]) / 2)
                     for k in range(len(armPieces)):
                         if armPieces[k].row == deleteRow and armPieces[k].col == deleteCol:
                             del armPieces[k]
@@ -348,12 +428,15 @@ def playerMovesAgain(contours):
                     board[playerPieces[index].row][playerPieces[index].col] = '_'
                     playerPieces[index].row = legalExtraPlayerMoves[i][3]
                     playerPieces[index].col = legalExtraPlayerMoves[i][4]
+                    playerPieces[index].x = playableAreas[playerPieces[index].row][playerPieces[index].col][0]
+                    playerPieces[index].y = playableAreas[playerPieces[index].row][playerPieces[index].col][1]
                     
                     # update board spot dead
                     board[deleteRow][deleteCol] = '_'
 
                     # update board spot new
                     board[playerPieces[index].row][playerPieces[index].col] = playerPieces[index]
+                    printBoard()
 
                     
 
@@ -431,7 +514,13 @@ def checkPlayerMovement(contours):
                             if playerPieces[foundIndex].row == i - 1 and (playerPieces[foundIndex].col == j - 1 or playerPieces[foundIndex].col == j + 1):
                                 legalMove = True
 
-                            # add rest later
+                            # upward left kill
+                            if legalMove == False and playerPieces[foundIndex].row == i - 2 and playerPieces[foundIndex].col == j - 2 and board[i-1][j-1].team == False:
+                                legalMove = True
+
+                            # upward right kill
+                            if legalMove == False and playerPieces[foundIndex].row == i - 2 and playerPieces[foundIndex].col == j + 2 and board[i-1][j+1].team == False:
+                                legalMove = True
 
 
                     if legalMove == True:
@@ -587,6 +676,10 @@ def track_color(mask, label, bgr_color):
         armPlay()
         lastCheck = time.time()
 
+
+    if time.time() - lastCheck > 0.01 and extraArmTurnIndex != None:
+        armPlaysAgain()
+        lastCheck = time.time()
 
     for cnt in contours:
         area = cv2.contourArea(cnt)
