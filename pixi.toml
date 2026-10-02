@@ -1,0 +1,10 @@
+[workspace]
+authors = ["MarkTheHumble <moneybobbey@gmail.com>"]
+channels = ["conda-forge"]
+name = "Arm-Demonstrations"
+platforms = ["linux-64"]
+version = "0.1.0"
+
+[tasks]
+
+[dependencies]
