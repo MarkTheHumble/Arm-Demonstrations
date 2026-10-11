@@ -1,2 +1,0 @@
-[console_scripts]
-checkers = colman_motion.checkers:main
