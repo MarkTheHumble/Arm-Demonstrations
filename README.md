@@ -50,13 +50,11 @@ You should see RViz appear. If the arm on your screen is in a different position
 
 ### 9. Launch the game
 
-inside of a different shell, with the shell that performed "pixi run lan" still running,
+inside of a different shell, with the shell that performed "pixi run launch-lan" still running,
 
 ```
 pixi run rps
 ```
-
-Spend the first 6.5 seconds of the game aligning the 8x6 board with the temporary red lines that should be going through the vertical and horizontal centers of the checkers board. The game is currently expecting blue pieces on the arm side and pink pieces on the players side.
 
 ### Aftermath
 
