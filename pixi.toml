@@ -1,10 +1,157 @@
 [workspace]
-authors = ["MarkTheHumble <moneybobbey@gmail.com>"]
-channels = ["conda-forge"]
-name = "Arm-Demonstrations"
+name = "arm-demos"
+authors = ["nathanrsxtn, morfinm3"]
+preview = ["pixi-build"]
+channels = ["https://prefix.dev/robostack-jazzy", "https://prefix.dev/conda-forge"]
 platforms = ["linux-64"]
-version = "0.1.0"
+
+[activation]
+# Run `pixi run build` to create install files.
+scripts = ["install/setup.sh"]
 
 [tasks]
+arm-demo = "ros2 launch arm_demo arm_demo.launch.py gripper_type:=vacuum use_camera:=false"
+rps = "ros2 launch rps rps.launch.py gripper_type:=vacuum use_camera:=false"                  #rock paper scissors
+
+# Tool Tasks
+download-mediapipe-model = "curl -O https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/latest/hand_landmarker.task"
+view-ur = "ros2 launch urdf_tutorial display.launch.py"
+psgrep = 'ps aux | grep "$PIXI_PROJECT_ROOT"'
+clean = "rm -r build install log"
+purge = "rm -r .pixi build install log ~/.cache/rattler"
+
+# Task Aliases
+b = [{ task = "build" }]
+launch = [{ task = "launch-lan" }]
+run = [{ task = "launch-lan" }]
+sim = [{ task = "launch-sim" }]
+mock = [{ task = "launch-sim" }]
+docs = [{ task = "build-docs" }]
+
+# Experimental Tasks
+moveit = "ros2 launch ur_moveit_config ur_moveit.launch.py ur_type:=ur3e use_sim_time:=true launch_rviz:=true"
+gripper-demo = "ros2 launch colman_motion pick_and_place.launch.py gripper_type:=vacuum"
+
+# Development Environment Build and Install Task
+[tasks.build]
+description = "Development Environment Build and Install Task"
+cmd = "colcon build --symlink-install"
+inputs = ["src"]
+outputs = ["install"]
+
+# Real LAN UR Robot Driver Launch Task
+[tasks.launch-lan]
+description = "Real LAN UR Robot Driver Launch Task"
+depends-on = [
+  { task = "_launch", args = [
+    { ur_type = "ur3e" },
+    { robot_ip = "192.168.56.101" },
+    { description_launchfile = "$(ros2 pkg prefix colman_bringup)/share/colman_bringup/launch/rsp.launch.py" },
+    { use_mock_hardware = "false" },
+    { headless_mode = "true" },
+    { launch_dashboard_client = "false" },
+  ] }
+]
+
+# Mock Hardware UR Robot Driver Launch Task
+[tasks.launch-sim]
+description = "Mock Hardware UR Robot Driver Launch Task"
+depends-on = [
+  { task = "_launch", args = [
+    { ur_type = "ur3e" },
+    { robot_ip = "0.0.0.0" },
+    { description_launchfile = "$(ros2 pkg prefix colman_bringup)/share/colman_bringup/launch/rsp.launch.py" },
+    { use_mock_hardware = "true" },
+    { headless_mode = "false" },
+    { launch_dashboard_client = "false" },
+  ] }
+]
+
+# Template UR Robot Driver Launch Task
+[tasks._launch]
+description = "Template UR Robot Driver Launch Task"
+depends-on = [ { task = "build" } ]
+cmd = """
+ros2 launch ur_robot_driver ur_control.launch.py \
+ur_type:={{ur_type}} \
+robot_ip:={{robot_ip}} \
+description_launchfile:={{description_launchfile}} \
+use_mock_hardware:={{use_mock_hardware}} \
+headless_mode:={{headless_mode}} \
+launch_dashboard_client:={{launch_dashboard_client}} \
+gripper_type:=vacuum \
+"""
+args = [
+    { "arg" = "robot_ip" },
+    { "arg" = "ur_type" },
+    { "arg" = "description_launchfile" },
+    { "arg" = "use_mock_hardware", "choices" = [ "false", "true" ] },
+    { "arg" = "headless_mode", "choices" = [ "false", "true" ] },
+    { "arg" = "launch_dashboard_client", "choices" = [ "false", "true" ] },
+]
 
 [dependencies]
+python = "3.12.*"
+ros-jazzy-desktop = "0.11.*"
+ros-jazzy-moveit = "2.12.*"
+ros-jazzy-moveit-py = "2.12.*"
+ros-jazzy-moveit-ros-move-group = "2.12.*"
+ros-jazzy-ros2-controllers = "4.37.*"
+ros-jazzy-trac-ik = "2.0.*"
+ros-jazzy-trac-ik-kinematics-plugin = "2.0.*"
+ros-jazzy-trac-ik-lib = "2.0.*"
+ros-jazzy-ur = "3.7.*"
+ros-jazzy-ur-description = "3.5.*"
+ros-jazzy-ur-moveit-config = "3.7.*"
+colcon-common-extensions = "==0.3.0" # Used for development builds with colcon --symlink-install
+setuptools = "==79.0.1" # Used for development builds with colcon --symlink-install
+make = "*" # Used by colcon for packages defining a CMakeLists.txt
+compilers = "*" # Used by colcon for packages defining a CMakeLists.txt
+filelock = "*" # Required by controller_manager
+uv = "*" # Required for vscode ms-python.vscode-python-envs
+isort = "*" # Required for vscode ms-python.isort because the bundled version is broken
+debugpy = "*"
+
+[pypi-dependencies]
+opencv-python = "*"
+depthai = "*"
+mediapipe = "*"
+
+[activation.env]
+# Enable ROS Colored Logging
+RCUTILS_COLORIZED_OUTPUT = "1"
+
+
+# Environment for running OAK Viewer, with WSL support
+[environments.oak-viewer]
+features = ["oak-viewer"]
+no-default-feature = true
+
+[feature.oak-viewer.activation.env]
+PATH = "${PWD}/.packages/usr/bin:${PATH}"
+LD_LIBRARY_PATH = "${PWD}/.packages/usr/lib:${LD_LIBRARY_PATH}"
+XDG_DATA_DIRS = "${PWD}/.packages/usr/share:${XDG_DATA_DIRS}"
+DBUS_SYSTEM_BUS_ADDRESS = "unix:path=/run/dbus/system_bus_socket"
+DBUS_SESSION_BUS_ADDRESS = "unix:path=/run/user/1000/bus"
+
+[feature.oak-viewer.tasks]
+install-oak = "./tools/create-oak-env.sh"
+setup-oak = "echo 'SUBSYSTEM==\"usb\", ATTRS{idVendor}==\"03e7\", MODE=\"0666\"' | sudo tee /etc/udev/rules.d/80-movidius.rules && sudo udevadm control --reload-rules && sudo udevadm trigger"
+connect-oak-wsl = 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$(wslpath -w $PWD)\\tools\\connect-oak-wsl.ps1"'
+oak-viewer = "dbus-launch oak-viewer --no-sandbox"
+oak-viewer-wsl = "dbus-launch oak-viewer --use-gl=desktop --enable-unsafe-swiftshader --ignore-gpu-blocklist"
+
+# Environment for generating documentation
+[environments.docs]
+features = ["docs"]
+no-default-feature = true
+
+[feature.docs.dependencies]
+python = "3.12.*"
+sphinx = "8.2.*"
+sphinx-rtd-theme = "3.1.*"
+
+[feature.docs.tasks.build-docs]
+cwd = "docs"
+cmd = 'sphinx-build -M html source build -c . -W'
+clean-env = true

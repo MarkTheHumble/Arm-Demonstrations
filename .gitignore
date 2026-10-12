@@ -1,5 +1,6 @@
 # pixi environments
 .pixi/*
+.packages
 !.pixi/config.toml
 
 /build/
