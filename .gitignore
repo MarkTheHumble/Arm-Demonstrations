@@ -5,5 +5,7 @@
 /build/
 /install/
 /log/
+/emnist_data/
+xo_cnn.pt
 
 /src/colman_motion/colman_motion/__pycache__/

@@ -50,3 +50,18 @@ semver = ">=3.0.4,<4"
 [pypi-dependencies]
 ultralytics = ">=8.4.11, <9"
 depthai = ">=2.24"
+torch = "*"
+
+
+
+
+
+
+
+
+# this version did not go anywhere
+# [pypi-dependencies]
+# ultralytics = ">=8.4.11, <9"
+# depthai = ">= 3.0"
+# rapidocr = ">= 3.10"
+# onnxruntime = "*"

@@ -1,808 +1,366 @@
-import cv2
-import depthai as dai
-import numpy as np
+#!/usr/bin/env python3
+"""
+Find handwritten X and O marks and report an (x, y) for each one.
+Works on an OAK camera (DepthAI v3) or on an image file.
+
+How it works
+------------
+1. LOCATE  Classic image processing: threshold the ink, join broken strokes, and take
+           every separate blob of a plausible size as a candidate mark.  This is where
+           the x, y comes from (centre of the blob's box).
+2. CLASSIFY  Each candidate is cropped, scaled and centred like an MNIST digit (20 px in
+           a 28x28 frame) and a small CNN says "x" or "o".  The CNN is trained on the
+           X and O letters from EMNIST - the MNIST-style dataset that includes letters.
+
+Why not plain MNIST: MNIST only contains the digits 0-9.  It has no X at all (and its
+"0" is only a rough stand-in for an O), so it cannot teach this.  EMNIST letters uses the
+same 28x28 format and has both.
+
+First run: if WEIGHTS_PATH does not exist, `main()` downloads EMNIST (roughly 0.5 GB, once)
+and trains the CNN, which takes a few minutes on a CPU.  You can also call `train()` yourself.
+
+Usage (edit SETTINGS first):
+    import xo_detect
+    xo_detect.main()                  # camera loop, or one image if IMAGE_PATH is set
+    marks = xo_detect.detect(frame)   # one BGR numpy frame -> list of Mark
+
+Coordinates are pixels in the frame: origin top-left, x to the right, y down.
+"""
+
+from __future__ import annotations
+
+import json
+import math
 import time
-import random
-
-import threading
-import rclpy
-from moveit.planning import MoveItPy, PlanRequestParameters
-from rclpy.executors import MultiThreadedExecutor
-from colman_motion.arm_control import ArmControl
-from colman_motion.scene_manager import SceneManager
-from colman_motion.vacuum_control import VacuumControl
-
-STARTING_POSITION = {
-    "shoulder_pan_joint": 0 * (np.pi / 180),
-    "shoulder_lift_joint": -90 * (np.pi / 180),
-    "elbow_joint": 0 * (np.pi / 180),
-    "wrist_1_joint": -90 * (np.pi / 180),
-    "wrist_2_joint": 0 * (np.pi / 180),
-    "wrist_3_joint": 0 * (np.pi / 180),
-}
-
-PRE_CAMERA_POSITION = {
-    "shoulder_pan_joint": 0.5 * (np.pi / 180),
-    "shoulder_lift_joint": -100.5 * (np.pi / 180),
-    "elbow_joint": 85.5 * (np.pi / 180),
-    "wrist_1_joint": -75.5 * (np.pi / 180),
-    "wrist_2_joint": -90.5 * (np.pi / 180),
-    "wrist_3_joint": 0.5 * (np.pi / 180),
-}
-
-CAMERA_POSITION = {
-    "shoulder_pan_joint": 0 * (np.pi / 180),
-    "shoulder_lift_joint": -100 * (np.pi / 180),
-    "elbow_joint": 85 * (np.pi / 180),
-    "wrist_1_joint": -75 * (np.pi / 180),
-    "wrist_2_joint": -90 * (np.pi / 180),
-    "wrist_3_joint": 0 * (np.pi / 180),
-}
-
-# I think a square image looks better here
-width = 1000 #640
-height = 1000 #480 old
-playerColor = "pink"
-armColor = "blue"
-settingUp = True
-playerTurn = False
-extraPlayerTurnIndex = None
-extraArmTurnIndex = None
-rawPieces = []
-playerPieces = []
-armPieces = []
-armTurn = False
-launchTime = time.time()
-lastCheck = time.time()
-botCorner = (0,0)
-topCorner = (0,0)
-row = 0
-col = 1
-board = [[' ' for _ in range(6)] for _ in range(8)]
-playableAreas = [[' ' for _ in range(6)] for _ in range(8)]
-APPROACH_OFFSET = 0.1
-EE_OFFSET = 0.01
-EE_DOWN = (1.0, 0.0, 0.0, 0.0)
-class Piece:
-    def __init__(self, x, y, row, col, king, team):
-        self.x = x
-        self.y = y
-        self.row = row
-        self.col = col
-        self.king = king
-        self.team = team  #true == player, false == robot arm
-
-    # new default print output for testing sometimes
-    def __str__(self):
-        # return f"X:{self.x}, Y:{self.y}, R:{self.row}, C:{self.col}"
-        if self.team == True:
-            return "P"
-        else:
-            return "B"
-        
-def printBoard():
-    global board
-
-    print("-----------")
-    for i in range(len(board)-1, -1, -1):
-        for j in range(len(board[i])):
-            if board[i][j] == '_':
-                print("_", end= "")
-                # print("______________________", end= "")
-            else:
-                print(f"{board[i][j]} ", end= "")
-        print()
-    print("-----------",flush=True)
-
-
-def movePiece(initalRow, initialCol, endRow, endCol):
-
-    global arm, vacuum, EE_DOWN, PRE_CAMERA_POSITION, CAMERA_POSITION, veryFast, fast, slow, verySlow
-
-    botRowX = 0.2398202570602908
-    topRowX = 0.4568202570602908
-    minColY = 0.21078172353256214           # y values are flipped for robot arm move parameters
-    maxColY = 0.05078172353256214
-    # graveyardMaxY = -0.20078172353256214
-    graveyardY = -0.05
-    hoverZ = 0.01007029111737157
-    grabZ = 0.00207029111737157
-
-    initialX = botRowX + (((topRowX - botRowX) / 7) * initalRow)
-    endX = botRowX + (((topRowX - botRowX) / 7) * endRow)
-    initalY = minColY - (((minColY - maxColY) / 5) * initialCol)
-    endY = minColY - (((minColY - maxColY) / 5) * endCol)
-
-    print(f"initalRow {initalRow},\ninitialCol {initialCol},\nendRow {endRow},\nendCol {endCol}")
-
-    # grab from initial location
-    coordinates = [
-        initialX, initalY, hoverZ,
-    ]
-    arm.go_to_pose(*coordinates, *EE_DOWN, fast)
-
-    coordinates[2] = grabZ
-    arm.go_to_pose(*coordinates, *EE_DOWN, slow)
-
-    vacuum.grasp()
-
-    coordinates[2] = hoverZ
-    arm.go_to_pose(*coordinates, *EE_DOWN, slow)
-
-    # move to new location
-    coordinates = [
-        endX, endY, hoverZ,
-    ]
-    arm.go_to_pose(*coordinates, *EE_DOWN, fast)
-
-    coordinates[2] = grabZ
-    arm.go_to_pose(*coordinates, *EE_DOWN, slow)
-
-    vacuum.release()
-
-    coordinates[2] = hoverZ
-    arm.go_to_pose(*coordinates, *EE_DOWN, slow)
-
-    # if the arm moves more than 1 row and has to get a player piece off the board
-    if abs(initalRow - endRow) > 1:
-        initialX = (initialX + endX) / 2
-        initalY = (initalY + endY) / 2
-
-        coordinates = [
-            initialX, initalY, hoverZ,
-        ]
-        arm.go_to_pose(*coordinates, *EE_DOWN, fast)
-
-        coordinates[2] = grabZ
-        arm.go_to_pose(*coordinates, *EE_DOWN, slow)
-
-        vacuum.grasp()
-
-        coordinates[2] = hoverZ
-        arm.go_to_pose(*coordinates, *EE_DOWN, slow)
-
-        coordinates[1] = graveyardY
-        coordinates[2] = hoverZ + 0.03
-        arm.go_to_pose(*coordinates, *EE_DOWN, veryFast)
-
-        vacuum.release()
-
-
-    arm.go_to_joint_pose(PRE_CAMERA_POSITION, veryFast)
-    arm.go_to_joint_pose(CAMERA_POSITION, verySlow)
-
-def armPlaysAgain():
-
-    global board, playerPieces, playableAreas, armPieces, botCorner, topCorner, playerTurn, armTurn, extraArmTurnIndex
-
-    i = extraArmTurnIndex
-    legalArmMoves = []
-
-    # basic left point
-    if armPieces[i].col > 1 and armPieces[i].row < 6:
-        if board[armPieces[i].row + 2][armPieces[i].col - 2] == '_' and board[armPieces[i].row + 1][armPieces[i].col - 1] != '_':
-            if board[armPieces[i].row + 1][armPieces[i].col - 1].team == True:
-                legalArmMoves.append((i, armPieces[i].row, armPieces[i].col, (armPieces[i].row + 2), (armPieces[i].col - 2), True))
-
-
-    # basic right point
-    if armPieces[i].col < 4 and armPieces[i].row < 6:
-        if board[armPieces[i].row + 2][armPieces[i].col + 2] == '_' and board[armPieces[i].row + 1][armPieces[i].col + 1] != '_':
-            if board[armPieces[i].row + 1][armPieces[i].col + 1].team == True:
-                legalArmMoves.append((i, armPieces[i].row, armPieces[i].col, (armPieces[i].row + 2), (armPieces[i].col + 2), True))
-
-
-    # king exclusive moves
-    if armPieces[i].king == True:
-
-        # king left point
-        if armPieces[i].col > 1 and armPieces[i].row > 1:
-            if board[armPieces[i].row - 2][armPieces[i].col - 2] == '_' and board[armPieces[i].row - 1][armPieces[i].col - 1] != '_':
-                if board[armPieces[i].row - 1][armPieces[i].col - 1].team == True:
-                    legalArmMoves.append((i, armPieces[i].row, armPieces[i].col, (armPieces[i].row - 2), (armPieces[i].col - 2), True))
-
-
-        # king right point
-        if armPieces[i].col < 4 and armPieces[i].row > 1:
-            if board[armPieces[i].row - 2][armPieces[i].col + 2] == '_' and board[armPieces[i].row - 1][armPieces[i].col + 1] != '_':
-                if board[armPieces[i].row - 1][armPieces[i].col + 1].team == True:
-                    legalArmMoves.append((i, armPieces[i].row, armPieces[i].col, (armPieces[i].row - 2), (armPieces[i].col + 2), True))
-
-
-
-    if len(legalArmMoves) == 0:
-        extraArmTurnIndex = None
-        playerTurn = True
-        return
-
-    chosenMove = legalArmMoves[random.randrange(len(legalArmMoves))]
-    
-    movePiece(chosenMove[1], chosenMove[2], chosenMove[3], chosenMove[4])
-
-    armPieces[chosenMove[0]].row = chosenMove[3]
-    armPieces[chosenMove[0]].col = chosenMove[4]
-    armPieces[chosenMove[0]].x = playableAreas[chosenMove[3]][chosenMove[4]][0]
-    armPieces[chosenMove[0]].y = playableAreas[chosenMove[3]][chosenMove[4]][1]
-    board[chosenMove[1]][chosenMove[2]] = '_'
-    board[chosenMove[3]][chosenMove[4]] = armPieces[chosenMove[0]]
-
-
-    deleteRow = int((chosenMove[1] + chosenMove[3]) / 2)
-    deleteCol = int((chosenMove[2] + chosenMove[4]) / 2)
-
-    for j in range(len(playerPieces)):
-        if playerPieces[j].row == deleteRow and playerPieces[j].col == deleteCol:
-            del playerPieces[j]
-            break
-    board[deleteRow][deleteCol] = '_'
-    extraArmTurnIndex = chosenMove[0]
-
-    # if resulting row was the top row
-    if chosenMove[3] == 7:
-        armPieces[chosenMove[0]].king = True
-
-    print(legalArmMoves,flush=True)
-    print(f"Chosen move: {chosenMove}",flush=True)
-    printBoard()
-
-
-def armPlay():
-
-    global board, playerPieces, playableAreas, armPieces, botCorner, topCorner, playerTurn, armTurn, extraArmTurnIndex
-
-    # save in this format to make things easier later
-    # index of armPiece, initial row, initial col, result row, result col, boolean for if the move removes a player piece
-    legalArmMoves = []
-
-    for i in range(len(armPieces)):
-        # if you can look left
-        if armPieces[i].col > 0 and armPieces[i].row < 7:
-            if board[armPieces[i].row + 1][armPieces[i].col - 1] == '_':
-                legalArmMoves.append((i, armPieces[i].row, armPieces[i].col, (armPieces[i].row + 1), (armPieces[i].col - 1), False))
- 
-        # if you can look right
-        if armPieces[i].col < 5 and armPieces[i].row < 7:
-            if board[armPieces[i].row + 1][armPieces[i].col + 1] == '_':
-                legalArmMoves.append((i, armPieces[i].row, armPieces[i].col, (armPieces[i].row + 1), (armPieces[i].col + 1), False))
-
-
-        # basic left point
-        if armPieces[i].col > 1 and armPieces[i].row < 6:
-            if board[armPieces[i].row + 2][armPieces[i].col - 2] == '_' and board[armPieces[i].row + 1][armPieces[i].col - 1] != '_':
-                if board[armPieces[i].row + 1][armPieces[i].col - 1].team == True:
-                    legalArmMoves.clear()
-                    legalArmMoves.append((i, armPieces[i].row, armPieces[i].col, (armPieces[i].row + 2), (armPieces[i].col - 2), True))
-                    break
-
-
-        # basic right point
-        if armPieces[i].col < 4 and armPieces[i].row < 6:
-            if board[armPieces[i].row + 2][armPieces[i].col + 2] == '_' and board[armPieces[i].row + 1][armPieces[i].col + 1] != '_':
-                if board[armPieces[i].row + 1][armPieces[i].col + 1].team == True:
-                    legalArmMoves.clear()
-                    legalArmMoves.append((i, armPieces[i].row, armPieces[i].col, (armPieces[i].row + 2), (armPieces[i].col + 2), True))
-                    break
-
-
-        # king exclusive moves
-        if armPieces[i].king == True:
-
-            #king left
-            if armPieces[i].col > 0 and armPieces[i].row > 0:
-                if board[armPieces[i].row - 1][armPieces[i].col - 1] == '_':
-                    legalArmMoves.append((i, armPieces[i].row, armPieces[i].col, (armPieces[i].row - 1), (armPieces[i].col - 1), False))
-
-            # king right
-            if armPieces[i].col < 5 and armPieces[i].row > 0:
-                if board[armPieces[i].row - 1][armPieces[i].col + 1] == '_':
-                    legalArmMoves.append((i, armPieces[i].row, armPieces[i].col, (armPieces[i].row - 1), (armPieces[i].col + 1), False))
-
-
-            # king left point
-            if armPieces[i].col > 1 and armPieces[i].row > 1:
-                if board[armPieces[i].row - 2][armPieces[i].col - 2] == '_' and board[armPieces[i].row - 1][armPieces[i].col - 1] != '_':
-                    if board[armPieces[i].row - 1][armPieces[i].col - 1].team == True:
-                        legalArmMoves.clear()
-                        legalArmMoves.append((i, armPieces[i].row, armPieces[i].col, (armPieces[i].row - 2), (armPieces[i].col - 2), True))
-                        break
-
-
-            # king right point
-            if armPieces[i].col < 4 and armPieces[i].row > 1:
-                if board[armPieces[i].row - 2][armPieces[i].col + 2] == '_' and board[armPieces[i].row - 1][armPieces[i].col + 1] != '_':
-                    if board[armPieces[i].row - 1][armPieces[i].col + 1].team == True:
-                        legalArmMoves.clear()
-                        legalArmMoves.append((i, armPieces[i].row, armPieces[i].col, (armPieces[i].row - 2), (armPieces[i].col + 2), True))
-                        break
-
-
-    # add physical moves and delete logic here
-    if len(legalArmMoves) > 0:
-
-        chosenMove = legalArmMoves[random.randrange(len(legalArmMoves))]
-
-        movePiece(chosenMove[1], chosenMove[2], chosenMove[3], chosenMove[4])
-
-        armPieces[chosenMove[0]].row = chosenMove[3]
-        armPieces[chosenMove[0]].col = chosenMove[4]
-        armPieces[chosenMove[0]].x = playableAreas[chosenMove[3]][chosenMove[4]][0]
-        armPieces[chosenMove[0]].y = playableAreas[chosenMove[3]][chosenMove[4]][1]
-        board[chosenMove[1]][chosenMove[2]] = '_'
-        board[chosenMove[3]][chosenMove[4]] = armPieces[chosenMove[0]]
-
-        # if the move was aggressive enough to remove a player piece
-        if chosenMove[5] == True:
-            deleteRow = int((chosenMove[1] + chosenMove[3]) / 2)
-            deleteCol = int((chosenMove[2] + chosenMove[4]) / 2)
-
-            for i in range(len(playerPieces)):
-                if playerPieces[i].row == deleteRow and playerPieces[i].col == deleteCol:
-                    del playerPieces[i]
-                    break
-            board[deleteRow][deleteCol] = '_'
-            extraArmTurnIndex = chosenMove[0]
-        else:
-            playerTurn = True
-
-        # if resulting row was the top row
-        if chosenMove[3] == 7:
-            armPieces[chosenMove[0]].king = True
-
-        armTurn = False
-
-        print(legalArmMoves,flush=True)
-        print(f"Chosen move: {chosenMove}",flush=True)
-        printBoard()
-
-
-
-    else:
-        armTurn = False
-        playerTurn = True
-
-def playerMovesAgain(contours):
-
-    global board, playerPieces, armPieces, botCorner, topCorner, playerTurn, armTurn, extraPlayerTurnIndex
-
-    legalExtraPlayerMoves = []
-    # index, initial row, initial col, new row, new col, does it earn a point
-
-    index = extraPlayerTurnIndex
-
-    # basic left point
-    if playerPieces[index].col > 1 and playerPieces[index].row > 1:
-        if board[playerPieces[index].row - 2][playerPieces[index].col - 2] == '_' and board[playerPieces[index].row - 1][playerPieces[index].col - 1] != '_':
-            if board[playerPieces[index].row - 1][playerPieces[index].col - 1].team == False:
-                legalExtraPlayerMoves.append((index, playerPieces[index].row, playerPieces[index].col, (playerPieces[index].row - 2), (playerPieces[index].col - 2), True))
-
-
-    # basic right point
-    if playerPieces[index].col < 4 and playerPieces[index].row > 1:
-        if board[playerPieces[index].row - 2][playerPieces[index].col + 2] == '_' and board[playerPieces[index].row - 1][playerPieces[index].col + 1] != '_':
-            if board[playerPieces[index].row - 1][playerPieces[index].col + 1].team == False:
-                legalExtraPlayerMoves.append((index, playerPieces[index].row, playerPieces[index].col, (playerPieces[index].row - 2), (playerPieces[index].col + 2), True))
-
-    if playerPieces[index].king == True:
-
-        # king left point
-        if playerPieces[index].col > 1 and playerPieces[index].row > 1:
-            if board[playerPieces[index].row + 2][playerPieces[index].col - 2] == '_' and board[playerPieces[index].row + 1][playerPieces[index].col - 1] != '_':
-                if board[playerPieces[index].row + 1][playerPieces[index].col - 1].team == False:
-                    legalExtraPlayerMoves.append((index, playerPieces[index].row, playerPieces[index].col, (playerPieces[index].row + 2), (playerPieces[index].col - 2), True))
-        # king right point
-        if playerPieces[index].col < 4 and playerPieces[index].row > 1:
-            if board[playerPieces[index].row + 2][playerPieces[index].col + 2] == '_' and board[playerPieces[index].row + 1][playerPieces[index].col + 1] != '_':
-                if board[playerPieces[index].row + 1][playerPieces[index].col + 1].team == False:
-                    legalExtraPlayerMoves.append((index, playerPieces[index].row, playerPieces[index].col, (playerPieces[index].row + 2), (playerPieces[index].col + 2), True))
-
-
-
-    # exit if no additional move can be made
-    if len(legalExtraPlayerMoves) == 0:
-        extraPlayerTurnIndex = None
-        armTurn = True
-        return
-
-    print(legalExtraPlayerMoves)
-    print("MORE MOVES CAN BE MADE BY THE PLAYER",flush=True)
-
-    for cnt in contours:
-        area = cv2.contourArea(cnt)
-        if area > 400:  # ignore tiny noise
-            x, y, w, h = cv2.boundingRect(cnt)
-            cX, cY = x + int(w / 2), y + int(h / 2)
-
-            # untested
-            # check every contour x y against the x and y of playable area at the row and col of the potential extra move
-            for i in range(len(legalExtraPlayerMoves)):
-                if abs(cX - playableAreas[legalExtraPlayerMoves[i][3]][legalExtraPlayerMoves[i][4]][0]) < 30 and abs(cY - playableAreas[legalExtraPlayerMoves[i][3]][legalExtraPlayerMoves[i][4]][1]) < 30:
-                    # delete arm piece
-                    deleteRow = int((legalExtraPlayerMoves[i][1] + legalExtraPlayerMoves[i][3]) / 2)
-                    deleteCol = int((legalExtraPlayerMoves[i][2] + legalExtraPlayerMoves[i][4]) / 2)
-                    for k in range(len(armPieces)):
-                        if armPieces[k].row == deleteRow and armPieces[k].col == deleteCol:
-                            del armPieces[k]
-                            break
-                    
-                    # update board spot old
-                    board[playerPieces[index].row][playerPieces[index].col] = '_'
-                    playerPieces[index].row = legalExtraPlayerMoves[i][3]
-                    playerPieces[index].col = legalExtraPlayerMoves[i][4]
-                    playerPieces[index].x = playableAreas[playerPieces[index].row][playerPieces[index].col][0]
-                    playerPieces[index].y = playableAreas[playerPieces[index].row][playerPieces[index].col][1]
-                    
-                    # update board spot dead
-                    board[deleteRow][deleteCol] = '_'
-
-                    # update board spot new
-                    board[playerPieces[index].row][playerPieces[index].col] = playerPieces[index]
-                    printBoard()
-
-                    
-
-
-def checkPlayerMovement(contours):
-
-    global board, playerPieces, armPieces, botCorner, topCorner, playerTurn, armTurn, extraPlayerTurnIndex
-
-    amountFound = 0
-    piecesFound = [False] * len(playerPieces)
-    foundIndex = -1
-    potentialX = 0
-    potentialY = 0
-    legalMove = False
-    point = False
-    for cnt in contours:
-        found = False
-        area = cv2.contourArea(cnt)
-        if area > 400:  # ignore tiny noise
-            x, y, w, h = cv2.boundingRect(cnt)
-            cX, cY = x + int(w / 2), y + int(h / 2)
-            # check if a contour is within play
-            if cX < botCorner[0] and cX > topCorner[0] and cY < botCorner[1] and cY > topCorner[1]:
-
-                #check if the contour matches the location of a piece
-                for i in range(len(playerPieces)):
-                    if abs(cX - playerPieces[i].x) < 30 and abs(cY - playerPieces[i].y) < 30:
-                        piecesFound[i] = True
-                        amountFound += 1
-                        found = True
-                        break
-                if found == False:
-                    potentialX = cX
-                    potentialY = cY
-
-
-    #if all pieces were found within play, but exactly one was not in any of the currently expected positions
-    if potentialY != 0 and amountFound == len(playerPieces) - 1:
-        for i in range(len(playerPieces)):
-            if piecesFound[i] == False:
-                # get the index of the singular piece
-                foundIndex = i
-
-    if foundIndex > -1:
-        for i in range(len(board)):
-            for j in range(len(board[i])):
-                # if the spot on the board is blank and playable
-                if board[i][j] == '_': 
-                    # if the scanned contour is close enough to the center of a playable area
-                    if abs(potentialX - playableAreas[i][j][0]) < 30 and abs(potentialY - playableAreas[i][j][1]) < 30:
-
-                        # comparing the blank spot that contour is currently positioned in with the previous position of the one missing checkers piece
-
-                        # basic downward movement 1 unit
-                        if playerPieces[foundIndex].row == i + 1 and (playerPieces[foundIndex].col == j - 1 or playerPieces[foundIndex].col == j + 1):
-                            legalMove = True
-
-                            # if piece earned the title of king
-                            if i == 0:
-                                playerPieces[foundIndex].king = True
-
-                        # player killed arm piece downward left
-                        if legalMove == False and playerPieces[foundIndex].row == i + 2 and playerPieces[foundIndex].col == j - 2 and board[i+1][j-1].team == False:
-                            legalMove = True
-
-                        # player killed arm piece downward right
-                        if legalMove == False and playerPieces[foundIndex].row == i + 2 and playerPieces[foundIndex].col == j + 2 and board[i+1][j+1].team == False:
-                            legalMove = True
-
-
-                        # royal moves
-                        if playerPieces[foundIndex].king == True:
-
-                            # basic upward movement 1 unit
-                            if playerPieces[foundIndex].row == i - 1 and (playerPieces[foundIndex].col == j - 1 or playerPieces[foundIndex].col == j + 1):
-                                legalMove = True
-
-                            # upward left kill
-                            if legalMove == False and playerPieces[foundIndex].row == i - 2 and playerPieces[foundIndex].col == j - 2 and board[i-1][j-1].team == False:
-                                legalMove = True
-
-                            # upward right kill
-                            if legalMove == False and playerPieces[foundIndex].row == i - 2 and playerPieces[foundIndex].col == j + 2 and board[i-1][j+1].team == False:
-                                legalMove = True
-
-
-                    if legalMove == True:
-
-                        # if the player took out an arm piece
-                        if abs(playerPieces[foundIndex].row - i) > 1:
-                            deleteRow = int((playerPieces[foundIndex].row + i) / 2)
-                            deleteCol = int((playerPieces[foundIndex].col + j) / 2)
-                            for k in range(len(armPieces)):
-                                if armPieces[k].row == deleteRow and armPieces[k].col == deleteCol:
-                                    del armPieces[k]
-                                    break
-                            board[deleteRow][deleteCol] = '_'
-                            point = True
-
-                        # mark previous spot as blank
-                        board[playerPieces[foundIndex].row][playerPieces[foundIndex].col] = '_'
-                        # update current row and col for the piece itself
-                        playerPieces[foundIndex].row = i
-                        playerPieces[foundIndex].col = j
-                        # update x and y to match center of the square
-                        playerPieces[foundIndex].x = playableAreas[i][j][0]
-                        playerPieces[foundIndex].y = playableAreas[i][j][1]
-                        # have the piece appear in the correct spot on the board array
-                        board[i][j] = playerPieces[foundIndex]
-                        print(f"player moved to {i},{j}",flush=True)
-                        printBoard()
-                        if point == True:
-                            extraPlayerTurnIndex = foundIndex
-                        else:
-                            armTurn = True
-                        playerTurn = False
-                        break
-                        # add a second check for kings moving upwards
-            if legalMove == True:
-                break
-
-
-
-# using the inital positions of the checkers pieces to define most of the playable areas inside createBoard()
-# this is just for the areas in the middle that aren't initially filled with pieces
-def definePlayableAreas():
-
-    global board, playableAreas
-
-    # figure out the y value of the 2 missing rows
-    averageRow2y = (board[2][1].y + board[2][3].y + board[2][5].y)/3
-    averageRow5y = (board[5][0].y + board[5][2].y + board[5][4].y)/3
-    rowDifference = (averageRow2y - averageRow5y) / 3
-    row3y = averageRow2y - rowDifference
-    row4y = averageRow5y + rowDifference
-
-    for i in range (0, 6, 2):
-        playableAreas[3][i] = ((board[1][i].x + board[5][i].x + board[7][i].x) / 3, row3y)
-    for i in range (1, 7, 2):
-        playableAreas[4][i] = ((board[0][i].x + board[2][i].x + board[6][i].x) / 3, row4y)
-
-
-def createBoard(cX, cY):
-    
-    global settingUp, playerPieces, armPieces, botCorner, topCorner, row, col, board, playerTurn, playableAreas
-
-    duplicate = False
-    for i in range(len(playerPieces)):
-        if abs(cX - playerPieces[i].x) < 30 and abs(cY - playerPieces[i].y) < 30:
-            duplicate = True
-            break
-        
-    for i in range(len(armPieces)):
-        if abs(cX - armPieces[i].x) < 30 and abs(cY - armPieces[i].y) < 30:
-            duplicate = True
-            break
-        
-    if duplicate == False: # if unique
-        if cY < height // 2: # if on player's side of board
-            rawPieces.append(Piece(cX, cY, 0, 0, False, True))                            
-        else:
-            rawPieces.append(Piece(cX, cY, 0, 0, False, False))
-
-        # sorting pieces 3 at a time because the camera reads bottom up right to left and sometimes one piece is a pixel too low and gets read earlier than expected
-        if len(rawPieces) == 3:
-            # sorting the row by x value
-            rawPieces.sort(key=lambda rawPieces: rawPieces.x)
-            for piece in rawPieces:
-                piece.row = row
-                piece.col = col
-                col = col + 2
-
-            row = row + 1
-            if row == 3:
-                row = row + 2
-
-            if col == 7:
-                col = 0
-            else:
-                col = 1
-
-            if len(armPieces) > 8: #if piece belongs to player. arm pieces get scanned first so this works
-                for i in range (3):
-                    playerPieces.append(rawPieces[i])
-            else:
-                for i in range (3):
-                    armPieces.append(rawPieces[i])
-
-            rawPieces.clear()
-
-
-    # organize pieces onto the board
-    if len(armPieces) + len(playerPieces) == 18:
-        botCorner = (armPieces[2].x + 45, armPieces[2].y + 45)
-        topCorner = (playerPieces[6].x - 45, playerPieces[6].y - 45)
-        # print all pieces to make sure they're correct
-        for i in range(len(armPieces)):
-            print(f"{i}: {armPieces[i]}")
-        for i in range(len(playerPieces)):
-            print(f"{i}: {playerPieces[i]}",flush=True)
-
-        for piece in playerPieces + armPieces:
-            board[piece.row][piece.col] = piece
-            playableAreas[piece.row][piece.col] = (piece.x + 0,piece.y + 0) #0s may or may not be needed 
-        for i in range (0, 6, 2):
-            board[3][i] = '_'
-        for i in range (1, 7, 2):
-            board[4][i] = '_'
-
-        printBoard()
-        definePlayableAreas()
-
-        settingUp = False
-        playerTurn = True
-
-
-
-
-def track_color(mask, label, bgr_color):
-    global settingUp, launchTime, botCorner, topCorner, lastCheck, playerColor, extraPlayerTurnIndex
-
-    contours, _ = cv2.findContours(
-        mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
-    )
-
-    # occassionally check if the player made a move and then do the proper updates
-    if time.time() - lastCheck > 0.5 and playerTurn == True and label == playerColor:
-        checkPlayerMovement(contours)
-        lastCheck = time.time()
-
-    if time.time() - lastCheck > 0.1 and extraPlayerTurnIndex != None and label == playerColor:
-        playerMovesAgain(contours)
-        lastCheck = time.time()
-
-
-    if time.time() - lastCheck > 0.5 and armTurn == True:
-        armPlay()
-        lastCheck = time.time()
-
-
-    if time.time() - lastCheck > 0.01 and extraArmTurnIndex != None:
-        armPlaysAgain()
-        lastCheck = time.time()
-
-    for cnt in contours:
-        area = cv2.contourArea(cnt)
-        if area > 400:  # ignore tiny noise
-            x, y, w, h = cv2.boundingRect(cnt)
-            cX, cY = x + int(w / 2), y + int(h / 2)
-
-            if settingUp and time.time() - launchTime >= 6.5: 
-                # initial x and y values are wildly off if you don't wait a few seconds
-                createBoard(cX, cY)
-
-                
-            cv2.circle(frame, (cX, cY), 4, bgr_color, -1)
-
-
-
-# define what is pink and what is blue 
-pink_lower = np.array([165, 110, 180])
-pink_upper = np.array([180, 200, 255])
-
-blue_lower = np.array([90, 80, 80])
-blue_upper = np.array([130, 255, 255])
-
-# variables to control the arm and vacuum
-rclpy.init()
-ur = MoveItPy(node_name="moveit_py")
-
-arm = ArmControl(ur)
-scene = SceneManager(ur)
-vacuum = VacuumControl()
-
-executor = MultiThreadedExecutor()
-executor.add_node(arm)
-executor.add_node(scene)
-executor.add_node(vacuum)
-
-spin_thread = threading.Thread(target=executor.spin, daemon=True)
-spin_thread.start()
-
-# Setup collision scene and planners
-scene.add_box("table", "base_link", [2.0, 2.0, 0.01], (0.0, 0.0, -0.01))
-veryFast = PlanRequestParameters(ur, "ompl")
-veryFast.max_velocity_scaling_factor = 0.99
-veryFast.max_acceleration_scaling_factor = 0.99
-fast = PlanRequestParameters(ur, "ompl")
-fast.max_velocity_scaling_factor = 0.8
-fast.max_acceleration_scaling_factor = 0.8
-slow = PlanRequestParameters(ur, "ompl")
-slow.max_velocity_scaling_factor = 0.2
-slow.max_acceleration_scaling_factor = 0.2
-verySlow = PlanRequestParameters(ur, "ompl")
-verySlow.max_velocity_scaling_factor = 0.01
-verySlow.max_acceleration_scaling_factor = 0.01
-vacuum.release()
-
-# get in the position
-# arm.go_to_joint_pose(STARTING_POSITION, veryFast) # if I ever wanna reset the arm position from the computer instead
-arm.go_to_joint_pose(PRE_CAMERA_POSITION, veryFast)
-arm.go_to_joint_pose(CAMERA_POSITION, verySlow)
-launchTime = time.time()
-
-# make a pipeline
-with dai.Pipeline() as pipeline:
-    cam = pipeline.create(dai.node.Camera).build()
-
-    videoQueue = cam.requestOutput((width, height)).createOutputQueue()
-
-    pipeline.start()
-
-    while pipeline.isRunning():
-        videoIn = videoQueue.get()
-        if videoIn is None:
+from dataclasses import dataclass
+from pathlib import Path
+
+import cv2
+import numpy as np
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+# =========================================================================== #
+# SETTINGS - edit these by hand.  Nothing is read from the command line.
+# =========================================================================== #
+
+IMAGE_PATH = None          # None = read the OAK camera.  Or e.g. "page.png" to process one
+                           # image (writes "page_xo.png" next to it).
+JSON_PATH = None           # e.g. "marks.jsonl" appends every result as one JSON line; None = off
+
+# Camera (only used when IMAGE_PATH is None)
+CAMERA_SIZE = (1280, 720)  # (width, height); check your sensor's maximum
+CAMERA_FPS = 10
+PRINT_EVERY_S = 1.0        # how often the camera loop prints results to the console
+
+# Model files / training
+WEIGHTS_PATH = "xo_cnn.pt"  # created by train(); loaded by detect()
+DATA_DIR = "emnist_data"    # where torchvision stores the EMNIST download
+TRAIN_EPOCHS = 8
+
+# Deciding what counts as a mark
+MIN_CONF = 0.90            # ignore marks the CNN is less sure about (0 - 1)
+INK_IS_DARK = True         # True = dark pen on light paper, False = light ink on dark
+THRESH_BLOCK = 51          # adaptive-threshold window in px (odd; bigger than the pen stroke)
+THRESH_C = 12              # how much darker than its surroundings a pixel must be to count as ink
+JOIN_PX = 5                # close gaps up to about this many px so a two-stroke X is one mark
+MIN_SIZE = 20              # px; a mark's longer side must be at least this ...
+MAX_SIZE = 300             # ... and at most this
+MAX_ASPECT = 2.5           # reject long thin blobs (ruled lines, edges)
+TARGET_STROKE = 0.11       # pen thickness as a fraction of the mark size after scaling; thin
+                           # pen strokes are thickened to this so they look like EMNIST's.
+                           # 0 turns it off.
+REMOVE_LINES_PX = 0        # 0 = off.  For lined paper or a drawn grid, set this to a little more
+                           # than your biggest mark (e.g. 150): straight horizontal/vertical ink
+                           # at least this long is erased before looking for marks.  Without it,
+                           # a mark that touches a line merges with it and is rejected as too big.
+
+# =========================================================================== #
+
+CLASSES = ("x", "o")
+_EMNIST_O, _EMNIST_X = 15, 24      # label numbers in EMNIST "letters" (a=1 ... z=26)
+
+
+# --------------------------------------------------------------------------- #
+# Model
+# --------------------------------------------------------------------------- #
+
+
+class XONet(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.c1 = nn.Conv2d(1, 16, 3)
+        self.c2 = nn.Conv2d(16, 32, 3)
+        self.f1 = nn.Linear(32 * 5 * 5, 64)
+        self.f2 = nn.Linear(64, 2)
+
+    def forward(self, x):
+        x = F.max_pool2d(F.relu(self.c1(x)), 2)      # 28 -> 26 -> 13
+        x = F.max_pool2d(F.relu(self.c2(x)), 2)      # 13 -> 11 -> 5
+        x = F.dropout(F.relu(self.f1(x.flatten(1))), 0.3, self.training)
+        return self.f2(x)
+
+
+def load_emnist_xo():
+    """EMNIST letters, only X and O.  Returns uint8 images (N,28,28) white-on-black and
+    labels 0 = x, 1 = o, for train and test: (xs, ys, xt, yt)."""
+    from torchvision.datasets import EMNIST     # already installed with ultralytics
+    out = []
+    for is_train in (True, False):
+        try:
+            ds = EMNIST(DATA_DIR, split="letters", train=is_train, download=True)
+        except Exception as e:                  # pragma: no cover - needs network
+            raise RuntimeError(
+                f"Could not download EMNIST into {DATA_DIR!r}: {e}\n"
+                "Download gzip.zip from https://www.nist.gov/itl/products-and-services/"
+                "emnist-dataset and place it where torchvision expects it, or retry.") from e
+        t = ds.targets
+        keep = (t == _EMNIST_X) | (t == _EMNIST_O)
+        imgs = ds.data[keep].transpose(1, 2).contiguous().numpy()   # EMNIST is stored transposed
+        out += [imgs, (t[keep] == _EMNIST_O).long().numpy()]
+    return tuple(out)
+
+
+def augment(x: torch.Tensor) -> torch.Tensor:
+    """Random rotation / scale / shift and pen thickness, on a (B,1,28,28) batch in 0..1."""
+    b = x.shape[0]
+    ang = (torch.rand(b) * 2 - 1) * math.radians(20)
+    sc = 0.8 + 0.4 * torch.rand(b)
+    t = (torch.rand(b, 2) * 2 - 1) * 0.12
+    cos, sin = torch.cos(ang) / sc, torch.sin(ang) / sc
+    theta = torch.stack([torch.stack([cos, -sin, t[:, 0]], 1),
+                         torch.stack([sin, cos, t[:, 1]], 1)], 1)
+    x = F.grid_sample(x, F.affine_grid(theta, list(x.shape), align_corners=False),
+                      padding_mode="zeros", align_corners=False)
+    r = torch.rand(b, 1, 1, 1)
+    thick = F.max_pool2d(x, 3, 1, 1)
+    thin = -F.max_pool2d(-x, 3, 1, 1)
+    return torch.where(r < 0.35, thick, torch.where(r > 0.8, thin, x))
+
+
+def train(epochs: int | None = None) -> None:
+    epochs = TRAIN_EPOCHS if epochs is None else epochs
+    torch.manual_seed(0)
+    xs, ys, xt, yt = load_emnist_xo()
+    save_preview(xs, ys)
+    xs_t = torch.from_numpy(xs).float().div(255).unsqueeze(1)
+    ys_t = torch.from_numpy(ys)
+    xt_t = torch.from_numpy(xt).float().div(255).unsqueeze(1)
+    yt_t = torch.from_numpy(yt)
+    model = XONet()
+    opt = torch.optim.Adam(model.parameters(), 1e-3)
+    for epoch in range(epochs):
+        model.train()
+        perm = torch.randperm(len(xs_t))
+        for i in range(0, len(perm), 128):
+            idx = perm[i:i + 128]
+            loss = F.cross_entropy(model(augment(xs_t[idx])), ys_t[idx])
+            opt.zero_grad()
+            loss.backward()
+            opt.step()
+        model.eval()
+        with torch.no_grad():
+            acc = (model(xt_t).argmax(1) == yt_t).float().mean().item()
+        print(f"epoch {epoch + 1}/{epochs}  last loss {loss.item():.3f}  test accuracy {acc * 100:.1f}%")
+    torch.save({"state": model.state_dict(), "classes": CLASSES}, WEIGHTS_PATH)
+    print(f"saved {WEIGHTS_PATH}")
+
+
+def save_preview(xs: np.ndarray, ys: np.ndarray) -> None:
+    """Writes xo_training_preview.png: top row X, bottom row O.  Eyeball that they are
+    upright and look like letters (this catches a mis-oriented dataset)."""
+    rows = [np.hstack(list(xs[ys == k][:12])) for k in (0, 1)]
+    cv2.imwrite("xo_training_preview.png", cv2.resize(np.vstack(rows), None, fx=3, fy=3,
+                                                      interpolation=cv2.INTER_NEAREST))
+
+
+_MODEL = None
+
+
+def get_model() -> XONet:
+    global _MODEL
+    if _MODEL is None:
+        if not Path(WEIGHTS_PATH).exists():
+            raise FileNotFoundError(f"{WEIGHTS_PATH} not found - call train() first (or main()).")
+        m = XONet()
+        m.load_state_dict(torch.load(WEIGHTS_PATH, map_location="cpu")["state"])
+        _MODEL = m.eval()
+    return _MODEL
+
+
+# --------------------------------------------------------------------------- #
+# Locate + classify
+# --------------------------------------------------------------------------- #
+
+
+@dataclass
+class Mark:
+    label: str                       # "x" or "o"
+    x: float                         # centre of the mark's box, pixels
+    y: float
+    box: tuple[int, int, int, int]   # x0, y0, x1, y1
+    conf: float                      # 0..1
+
+
+def find_candidates(bgr: np.ndarray):
+    """Returns [(box, mask)] where mask is the mark's own ink (255) cropped to its box."""
+    gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
+    if not INK_IS_DARK:
+        gray = 255 - gray
+    gray = cv2.GaussianBlur(gray, (3, 3), 0)
+    ink = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                                cv2.THRESH_BINARY_INV, THRESH_BLOCK | 1, THRESH_C)
+    if REMOVE_LINES_PX:
+        # Hough finds straight lines at any tilt (a camera is never perfectly square to the page)
+        segs = cv2.HoughLinesP(ink, 1, np.pi / 180, threshold=REMOVE_LINES_PX // 2,
+                               minLineLength=REMOVE_LINES_PX, maxLineGap=8)
+        if segs is not None:
+            erase = np.zeros_like(ink)
+            for x1, y1, x2, y2 in segs[:, 0]:
+                cv2.line(erase, (int(x1), int(y1)), (int(x2), int(y2)), 255, 5)
+            ink = ink & ~erase
+    k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (JOIN_PX | 1, JOIN_PX | 1))
+    joined = cv2.morphologyEx(ink, cv2.MORPH_CLOSE, k)
+    n, labels, stats, _ = cv2.connectedComponentsWithStats(joined, connectivity=8)
+    out = []
+    for i in range(1, n):
+        x, y, w, h, _area = (int(v) for v in stats[i])
+        long_, short_ = max(w, h), min(w, h)
+        if long_ < MIN_SIZE or long_ > MAX_SIZE or long_ > MAX_ASPECT * short_:
             continue
-
-        frame = videoIn.getCvFrame()
-
-        # convert BGR frame to HSV color space
-        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-
-        # create binary masks for pink and blue
-        mask_pink = cv2.inRange(hsv, pink_lower, pink_upper)
-        mask_blue = cv2.inRange(hsv, blue_lower, blue_upper)
-
-        # clean up minor noise using morphological operations
-        kernel = np.ones((5, 5), np.uint8)
-        mask_pink = cv2.morphologyEx(mask_pink, cv2.MORPH_OPEN, kernel)
-        mask_blue = cv2.morphologyEx(mask_blue, cv2.MORPH_OPEN, kernel)
+        sl = (slice(y, y + h), slice(x, x + w))
+        mask = (((labels[sl] == i) & (ink[sl] > 0)) * 255).astype(np.uint8)
+        out.append(((x, y, x + w, y + h), mask))
+    return out
 
 
-        # track both pink and blue pieces
-        # this assumes blue pieces are on the arm side and pink pieces are on the player side. swap the order of these two lines if you swap color choices
-        track_color(mask_blue, armColor, (255, 0, 0))
-        track_color(mask_pink, playerColor, (147, 20, 255))
+def to_mnist(mask: np.ndarray) -> np.ndarray:
+    """Tight 255-on-0 crop -> 28x28 the way MNIST/EMNIST frame a character:
+    longest side 20 px, centred by centre of mass.  Thin strokes are thickened first."""
+    h, w = mask.shape
+    if TARGET_STROKE > 0:
+        cnts, _ = cv2.findContours(mask, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
+        perimeter = sum(len(c) for c in cnts)
+        if perimeter:
+            stroke = 2.0 * float(np.count_nonzero(mask)) / perimeter      # ~pen width in px
+            grow = TARGET_STROKE * max(h, w) - stroke
+            if grow >= 1:
+                k = 2 * int(round(grow / 2)) + 1
+                mask = cv2.dilate(mask, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k)))
+    s = 20.0 / max(h, w)
+    m = cv2.resize(mask, (max(1, round(w * s)), max(1, round(h * s))), interpolation=cv2.INTER_AREA)
+    canvas = np.zeros((28, 28), np.uint8)
+    y0, x0 = (28 - m.shape[0]) // 2, (28 - m.shape[1]) // 2
+    canvas[y0:y0 + m.shape[0], x0:x0 + m.shape[1]] = m
+    mo = cv2.moments(canvas)
+    if mo["m00"] > 0:
+        shift = np.float32([[1, 0, 13.5 - mo["m10"] / mo["m00"]], [0, 1, 13.5 - mo["m01"] / mo["m00"]]])
+        canvas = cv2.warpAffine(canvas, shift, (28, 28))
+    return canvas
 
 
-        # visual aids for where to position the checkerboard during startup before the game starts
-        if settingUp:
-            # nothing will work if pieces are not on opposite sides of this horizontal line during startup
-            # I use the position of the line to sort pieces into teams
-            cv2.line(frame, (0, height // 2), (width, height // 2), (0, 0, 255), 1)
-            # this line kinda helps center things but is not as important
-            cv2.line(frame, (width // 2, 0), (width // 2, width), (0, 0, 255), 1) 
+def detect(bgr: np.ndarray) -> list[Mark]:
+    cands = find_candidates(bgr)
+    if not cands:
+        return []
+    batch = torch.from_numpy(np.stack([to_mnist(m) for _, m in cands])).float().div(255).unsqueeze(1)
+    with torch.no_grad():
+        probs = F.softmax(get_model()(batch), dim=1)
+    conf, cls = probs.max(1)
+    marks = []
+    for ((x0, y0, x1, y1), _), c, k in zip(cands, conf.tolist(), cls.tolist()):
+        if c >= MIN_CONF:
+            marks.append(Mark(CLASSES[k], (x0 + x1) / 2.0, (y0 + y1) / 2.0, (x0, y0, x1, y1), c))
+    marks.sort(key=lambda m: (m.y, m.x))
+    return marks
 
-            # these dots kinda line up with the corners but are not as useful as the main lines imo
-            cv2.circle(frame, (194, 94), radius = 5, color = (0, 255, 0), thickness = -1)
-            cv2.circle(frame, (702, 90), radius = 5, color = (0, 255, 0), thickness = -1)
-            cv2.circle(frame, (803, 193), radius = 5, color = (0, 255, 0), thickness = -1)
-            cv2.circle(frame, (199, 805), radius = 5, color = (0, 255, 0), thickness = -1)
-            cv2.circle(frame, (300, 906), radius = 5, color = (0, 255, 0), thickness = -1)
-            cv2.circle(frame, (805, 905), radius = 5, color = (0, 255, 0), thickness = -1)
 
-        # visual aid for playing area
-        else:
-            cv2.rectangle(frame, botCorner, topCorner, (0, 255, 0), 2)
+# --------------------------------------------------------------------------- #
+# Output helpers + entry points
+# --------------------------------------------------------------------------- #
 
-        cv2.imshow("Checkers", frame)
 
-        # exit conditions
-        if cv2.waitKey(1) == ord("q") or (settingUp == False and (len(armPieces) == 0 or len(playerPieces) == 0)):
-            break
+def to_json(marks: list[Mark], w: int, h: int) -> dict:
+    return {"time": time.time(), "frame_size": [w, h],
+            "marks": [{"label": m.label, "x": round(m.x, 1), "y": round(m.y, 1),
+                       "box": list(m.box), "conf": round(m.conf, 3)} for m in marks]}
 
-cv2.destroyAllWindows()
-vacuum.release()
-scene.clear_scene()
-executor.shutdown()
-rclpy.shutdown()
+
+def print_marks(marks: list[Mark]) -> None:
+    print(f"--- {len(marks)} mark(s) ---")
+    for m in marks:
+        print(f"  {m.label.upper()}  ({m.x:.0f}, {m.y:.0f})  conf {m.conf:.2f}")
+
+
+def draw(img: np.ndarray, marks: list[Mark]) -> np.ndarray:
+    out = img.copy()
+    for m in marks:
+        colour = (0, 0, 255) if m.label == "x" else (255, 0, 0)
+        x0, y0, x1, y1 = m.box
+        cv2.rectangle(out, (x0, y0), (x1, y1), colour, 2)
+        cv2.putText(out, f"{m.label.upper()} {m.conf:.2f}", (x0, max(12, y0 - 6)),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, colour, 1, cv2.LINE_AA)
+    return out
+
+
+def run_image() -> None:
+    path = Path(IMAGE_PATH)
+    img = cv2.imread(str(path))
+    if img is None:
+        raise SystemExit(f"could not read {path}")
+    marks = detect(img)
+    print_marks(marks)
+    out_png = path.with_name(path.stem + "_xo.png")
+    cv2.imwrite(str(out_png), draw(img, marks))
+    print(f"annotated image -> {out_png}")
+    if JSON_PATH:
+        with open(JSON_PATH, "a") as f:
+            f.write(json.dumps(to_json(marks, img.shape[1], img.shape[0])) + "\n")
+
+
+def run_camera() -> None:
+    import depthai as dai   # imported here so image mode works without a camera
+
+    w, h = CAMERA_SIZE
+    json_file = open(JSON_PATH, "a") if JSON_PATH else None
+    last_print = 0.0
+    with dai.Pipeline() as pipeline:
+        cam = pipeline.create(dai.node.Camera).build()
+        out = cam.requestOutput((w, h), fps=CAMERA_FPS)
+        q = out.createOutputQueue(maxSize=1, blocking=False)
+        pipeline.start()
+        while pipeline.isRunning():
+            msg = q.tryGet()
+            if msg is None:
+                if cv2.waitKey(5) == ord("q"):
+                    break
+                continue
+            frame = msg.getCvFrame()
+            marks = detect(frame)
+            now = time.monotonic()
+            if now - last_print >= PRINT_EVERY_S:
+                last_print = now
+                print_marks(marks)
+            if json_file:
+                json_file.write(json.dumps(to_json(marks, frame.shape[1], frame.shape[0])) + "\n")
+                json_file.flush()
+            cv2.imshow("X / O detector", draw(frame, marks))
+            if cv2.waitKey(1) == ord("q"):
+                break
+        pipeline.stop()
+    cv2.destroyAllWindows()
+    if json_file:
+        json_file.close()
+
+
+def main() -> None:
+    """Trains first if there are no weights yet, then runs image mode or the camera loop."""
+    if not Path(WEIGHTS_PATH).exists():
+        print(f"{WEIGHTS_PATH} not found - downloading EMNIST and training (one time only)...")
+        train()
+    run_image() if IMAGE_PATH else run_camera()
+
+
+if __name__ == "__main__":
+    main()
