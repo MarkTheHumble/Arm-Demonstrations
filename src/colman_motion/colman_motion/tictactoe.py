@@ -41,6 +41,107 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+import threading
+import rclpy
+from moveit.planning import MoveItPy, PlanRequestParameters
+from rclpy.executors import MultiThreadedExecutor
+from colman_motion.arm_control import ArmControl
+from colman_motion.scene_manager import SceneManager
+from colman_motion.vacuum_control import VacuumControl
+
+PRE_CAMERA_POSITION = {
+    "shoulder_pan_joint": 0.5 * (np.pi / 180),
+    "shoulder_lift_joint": -120.5 * (np.pi / 180),
+    "elbow_joint": 120.5 * (np.pi / 180),
+    "wrist_1_joint": -90.5 * (np.pi / 180),
+    "wrist_2_joint": -90.5 * (np.pi / 180),
+    "wrist_3_joint": 0.5 * (np.pi / 180),
+}
+
+CAMERA_POSITION = {
+    "shoulder_pan_joint": 0 * (np.pi / 180),
+    "shoulder_lift_joint": -120 * (np.pi / 180),
+    "elbow_joint": 120 * (np.pi / 180),
+    "wrist_1_joint": -90 * (np.pi / 180),
+    "wrist_2_joint": -90 * (np.pi / 180),
+    "wrist_3_joint": 0 * (np.pi / 180),
+}
+
+board_positions = [
+    [(0.2248202570602908, 0.13978172353256214), (0.2248202570602908, 0.08428172353256214), (0.2248202570602908, 0.03478172353256214)],
+    [(0.2783202570602908, 0.13978172353256214), (0.2783202570602908, 0.08428172353256214), (0.2783202570602908, 0.03478172353256214)],
+    [(0.3318202570602908, 0.13978172353256214), (0.3318202570602908, 0.08428172353256214), (0.3318202570602908, 0.03478172353256214)]
+]
+
+def draw_x(row, col):
+
+    global arm, vacuum, EE_DOWN, PRE_CAMERA_POSITION, CAMERA_POSITION, veryFast, verySlow, board_positions
+
+    # first half
+    x = board_positions[row][col][0] + 0.011
+    y = board_positions[row][col][1] + 0.011
+    z = 0.08507029111737157
+
+    coordinates = [
+        x, y, z
+    ]
+    arm.go_to_pose(*coordinates, *EE_DOWN, veryFast)
+    
+    coordinates[0] -= 0.022
+    coordinates[1] -= 0.022
+    arm.go_to_pose(*coordinates, *EE_DOWN, veryFast)
+
+
+    # raise the marker to avoid smearing
+    coordinates[2] += 0.03
+    arm.go_to_pose(*coordinates, *EE_DOWN, veryFast)
+
+    # second half
+    x = board_positions[row][col][0] + 0.011
+    y = board_positions[row][col][1] - 0.011
+    z = 0.08507029111737157
+
+    coordinates = [
+        x, y, z
+    ]
+    arm.go_to_pose(*coordinates, *EE_DOWN, veryFast)
+    
+    coordinates[0] -= 0.022
+    coordinates[1] += 0.022
+    arm.go_to_pose(*coordinates, *EE_DOWN, veryFast)
+
+
+
+    # reset arm position
+    arm.go_to_joint_pose(PRE_CAMERA_POSITION, veryFast)
+    arm.go_to_joint_pose(CAMERA_POSITION, verySlow)
+
+def draw_circle(row, col):
+
+    global arm, vacuum, EE_DOWN, PRE_CAMERA_POSITION, CAMERA_POSITION, veryFast, verySlow, board_positions
+
+    radius = 0.015
+    for i in range(9):
+        # calculate the angle for each point in radians
+        # 9 iterations instead of 8 so it reaches the start a second time
+        angle = (2 * math.pi * i) / 8
+        
+        # calculate x and y coordinates
+        x = board_positions[row][col][0] + radius * math.cos(angle)
+        y = board_positions[row][col][1] + radius * math.sin(angle)
+        z = 0.08507029111737157
+
+        coordinates = [
+            x, y, z
+        ]
+        arm.go_to_pose(*coordinates, *EE_DOWN, veryFast)
+
+    # reset arm position
+    arm.go_to_joint_pose(PRE_CAMERA_POSITION, veryFast)
+    arm.go_to_joint_pose(CAMERA_POSITION, verySlow)
+
+
+# claude generated vision model training
 # =========================================================================== #
 # SETTINGS - edit these by hand.  Nothing is read from the command line.
 # =========================================================================== #
@@ -50,7 +151,7 @@ IMAGE_PATH = None          # None = read the OAK camera.  Or e.g. "page.png" to 
 JSON_PATH = None           # e.g. "marks.jsonl" appends every result as one JSON line; None = off
 
 # Camera (only used when IMAGE_PATH is None)
-CAMERA_SIZE = (1000, 1000)  # (width, height); check your sensor's maximum
+CAMERA_SIZE = (1000, 1000) # (width, height); check your sensor's maximum
 CAMERA_FPS = 10
 PRINT_EVERY_S = 1.0        # how often the camera loop prints results to the console
 
@@ -358,6 +459,38 @@ def run_camera() -> None:
     if json_file:
         json_file.close()
 
+# arm controls
+APPROACH_OFFSET = 0.1
+EE_OFFSET = 0.01
+EE_DOWN = (1.0, 0.0, 0.0, 0.0)
+rclpy.init()
+ur = MoveItPy(node_name="moveit_py")
+arm = ArmControl(ur)
+scene = SceneManager(ur)
+executor = MultiThreadedExecutor()
+executor.add_node(arm)
+executor.add_node(scene)
+spin_thread = threading.Thread(target=executor.spin, daemon=True)
+spin_thread.start()
+
+# Setup collision scene and planners
+scene.add_box("table", "base_link", [2.0, 2.0, 0.01], (0.0, 0.0, -0.01))
+veryFast = PlanRequestParameters(ur, "ompl")
+veryFast.max_velocity_scaling_factor = 0.99
+veryFast.max_acceleration_scaling_factor = 0.99
+fast = PlanRequestParameters(ur, "ompl")
+fast.max_velocity_scaling_factor = 0.8
+fast.max_acceleration_scaling_factor = 0.8
+slow = PlanRequestParameters(ur, "ompl")
+slow.max_velocity_scaling_factor = 0.2
+slow.max_acceleration_scaling_factor = 0.2
+verySlow = PlanRequestParameters(ur, "ompl")
+verySlow.max_velocity_scaling_factor = 0.01
+verySlow.max_acceleration_scaling_factor = 0.01
+
+# get in the position
+arm.go_to_joint_pose(PRE_CAMERA_POSITION, veryFast)
+arm.go_to_joint_pose(CAMERA_POSITION, verySlow)
 
 def main() -> None:
     """Trains first if there are no weights yet, then runs image mode or the camera loop."""

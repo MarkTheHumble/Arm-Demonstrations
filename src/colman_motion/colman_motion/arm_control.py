@@ -83,8 +83,8 @@ class ArmControl(Node):
         )
 
         for constraint in joint_constraint.joint_constraints:
-            constraint.tolerance_above = 0.001
-            constraint.tolerance_below = 0.001
+            constraint.tolerance_above = 0.0001
+            constraint.tolerance_below = 0.0001
 
         self.arm.set_goal_state(motion_plan_constraints=[joint_constraint])
         return self.plan_and_execute(single_plan_parameters=params)
