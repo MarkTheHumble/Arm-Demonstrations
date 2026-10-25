@@ -50,7 +50,7 @@ IMAGE_PATH = None          # None = read the OAK camera.  Or e.g. "page.png" to 
 JSON_PATH = None           # e.g. "marks.jsonl" appends every result as one JSON line; None = off
 
 # Camera (only used when IMAGE_PATH is None)
-CAMERA_SIZE = (1280, 720)  # (width, height); check your sensor's maximum
+CAMERA_SIZE = (1000, 1000)  # (width, height); check your sensor's maximum
 CAMERA_FPS = 10
 PRINT_EVERY_S = 1.0        # how often the camera loop prints results to the console
 
@@ -65,7 +65,7 @@ INK_IS_DARK = True         # True = dark pen on light paper, False = light ink o
 THRESH_BLOCK = 51          # adaptive-threshold window in px (odd; bigger than the pen stroke)
 THRESH_C = 12              # how much darker than its surroundings a pixel must be to count as ink
 JOIN_PX = 5                # close gaps up to about this many px so a two-stroke X is one mark
-MIN_SIZE = 20              # px; a mark's longer side must be at least this ...
+MIN_SIZE = 80              # px; a mark's longer side must be at least this ...
 MAX_SIZE = 300             # ... and at most this
 MAX_ASPECT = 2.5           # reject long thin blobs (ruled lines, edges)
 TARGET_STROKE = 0.11       # pen thickness as a fraction of the mark size after scaling; thin
@@ -301,6 +301,11 @@ def draw(img: np.ndarray, marks: list[Mark]) -> np.ndarray:
         cv2.rectangle(out, (x0, y0), (x1, y1), colour, 2)
         cv2.putText(out, f"{m.label.upper()} {m.conf:.2f}", (x0, max(12, y0 - 6)),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, colour, 1, cv2.LINE_AA)
+    thickness = 1    
+    cv2.line(out, (384, 129), (384, 878), (0, 255, 0), thickness)
+    cv2.line(out, (617, 880), (617, 129), (0, 255, 0), thickness)
+    cv2.line(out, (132, 385), (870, 385), (0, 255, 0), thickness)
+    cv2.line(out, (132, 623), (868, 623), (0, 255, 0), thickness)
     return out
 
 
