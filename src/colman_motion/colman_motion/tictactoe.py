@@ -29,7 +29,6 @@ Coordinates are pixels in the frame: origin top-left, x to the right, y down.
 
 from __future__ import annotations
 
-import json
 import math
 import time
 from dataclasses import dataclass
@@ -47,7 +46,6 @@ from moveit.planning import MoveItPy, PlanRequestParameters
 from rclpy.executors import MultiThreadedExecutor
 from colman_motion.arm_control import ArmControl
 from colman_motion.scene_manager import SceneManager
-from colman_motion.vacuum_control import VacuumControl
 
 PRE_CAMERA_POSITION = {
     "shoulder_pan_joint": 0.5 * (np.pi / 180),
@@ -72,6 +70,7 @@ board_positions = [
     [(0.2783202570602908, 0.13978172353256214), (0.2783202570602908, 0.08428172353256214), (0.2783202570602908, 0.03478172353256214)],
     [(0.3318202570602908, 0.13978172353256214), (0.3318202570602908, 0.08428172353256214), (0.3318202570602908, 0.03478172353256214)]
 ]
+board = [[None for _ in range(3)] for _ in range(3)]
 
 def draw_x(row, col):
 
@@ -146,9 +145,6 @@ def draw_circle(row, col):
 # SETTINGS - edit these by hand.  Nothing is read from the command line.
 # =========================================================================== #
 
-IMAGE_PATH = None          # None = read the OAK camera.  Or e.g. "page.png" to process one
-                           # image (writes "page_xo.png" next to it).
-JSON_PATH = None           # e.g. "marks.jsonl" appends every result as one JSON line; None = off
 
 # Camera (only used when IMAGE_PATH is None)
 CAMERA_SIZE = (1000, 1000) # (width, height); check your sensor's maximum
@@ -382,12 +378,6 @@ def detect(bgr: np.ndarray) -> list[Mark]:
 # --------------------------------------------------------------------------- #
 
 
-def to_json(marks: list[Mark], w: int, h: int) -> dict:
-    return {"time": time.time(), "frame_size": [w, h],
-            "marks": [{"label": m.label, "x": round(m.x, 1), "y": round(m.y, 1),
-                       "box": list(m.box), "conf": round(m.conf, 3)} for m in marks]}
-
-
 def print_marks(marks: list[Mark]) -> None:
     print(f"--- {len(marks)} mark(s) ---")
     for m in marks:
@@ -402,6 +392,8 @@ def draw(img: np.ndarray, marks: list[Mark]) -> np.ndarray:
         cv2.rectangle(out, (x0, y0), (x1, y1), colour, 2)
         cv2.putText(out, f"{m.label.upper()} {m.conf:.2f}", (x0, max(12, y0 - 6)),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, colour, 1, cv2.LINE_AA)
+
+    # lines for showing where to place the board
     thickness = 1    
     cv2.line(out, (384, 129), (384, 878), (0, 255, 0), thickness)
     cv2.line(out, (617, 880), (617, 129), (0, 255, 0), thickness)
@@ -410,26 +402,11 @@ def draw(img: np.ndarray, marks: list[Mark]) -> np.ndarray:
     return out
 
 
-def run_image() -> None:
-    path = Path(IMAGE_PATH)
-    img = cv2.imread(str(path))
-    if img is None:
-        raise SystemExit(f"could not read {path}")
-    marks = detect(img)
-    print_marks(marks)
-    out_png = path.with_name(path.stem + "_xo.png")
-    cv2.imwrite(str(out_png), draw(img, marks))
-    print(f"annotated image -> {out_png}")
-    if JSON_PATH:
-        with open(JSON_PATH, "a") as f:
-            f.write(json.dumps(to_json(marks, img.shape[1], img.shape[0])) + "\n")
-
 
 def run_camera() -> None:
     import depthai as dai   # imported here so image mode works without a camera
 
     w, h = CAMERA_SIZE
-    json_file = open(JSON_PATH, "a") if JSON_PATH else None
     last_print = 0.0
     with dai.Pipeline() as pipeline:
         cam = pipeline.create(dai.node.Camera).build()
@@ -448,16 +425,12 @@ def run_camera() -> None:
             if now - last_print >= PRINT_EVERY_S:
                 last_print = now
                 print_marks(marks)
-            if json_file:
-                json_file.write(json.dumps(to_json(marks, frame.shape[1], frame.shape[0])) + "\n")
-                json_file.flush()
             cv2.imshow("X / O detector", draw(frame, marks))
             if cv2.waitKey(1) == ord("q"):
                 break
         pipeline.stop()
     cv2.destroyAllWindows()
-    if json_file:
-        json_file.close()
+
 
 # arm controls
 APPROACH_OFFSET = 0.1
@@ -497,7 +470,7 @@ def main() -> None:
     if not Path(WEIGHTS_PATH).exists():
         print(f"{WEIGHTS_PATH} not found - downloading EMNIST and training (one time only)...")
         train()
-    run_image() if IMAGE_PATH else run_camera()
+    run_camera()
 
 
 if __name__ == "__main__":
