@@ -65,12 +65,26 @@ CAMERA_POSITION = {
     "wrist_3_joint": 0 * (np.pi / 180),
 }
 
+# for arm to aim at the board
 board_positions = [
     [(0.2248202570602908, 0.13978172353256214), (0.2248202570602908, 0.08428172353256214), (0.2248202570602908, 0.03478172353256214)],
     [(0.2783202570602908, 0.13978172353256214), (0.2783202570602908, 0.08428172353256214), (0.2783202570602908, 0.03478172353256214)],
     [(0.3318202570602908, 0.13978172353256214), (0.3318202570602908, 0.08428172353256214), (0.3318202570602908, 0.03478172353256214)]
 ]
+
+# for camera to detect new marks near these places
+board_coordinates = [
+    [(248, 758), (497, 746), (754, 758)],
+    [(244, 509), (510, 506), (752, 511)],
+    [(261, 274), (484, 264), (750, 262)]
+]
+
 board = [[None for _ in range(3)] for _ in range(3)]
+playerTurn = True
+armTurn = False
+playerSymbol = None
+armSymbol = None
+filled = 0
 
 def draw_x(row, col):
 
@@ -149,7 +163,7 @@ def draw_circle(row, col):
 # Camera (only used when IMAGE_PATH is None)
 CAMERA_SIZE = (1000, 1000) # (width, height); check your sensor's maximum
 CAMERA_FPS = 10
-PRINT_EVERY_S = 1.0        # how often the camera loop prints results to the console
+GAP = 0.5        # how often the camera loop prints results to the console
 
 # Model files / training
 WEIGHTS_PATH = "xo_cnn.pt"  # created by train(); loaded by detect()
@@ -379,9 +393,47 @@ def detect(bgr: np.ndarray) -> list[Mark]:
 
 
 def print_marks(marks: list[Mark]) -> None:
-    print(f"--- {len(marks)} mark(s) ---")
-    for m in marks:
-        print(f"  {m.label.upper()}  ({m.x:.0f}, {m.y:.0f})  conf {m.conf:.2f}")
+
+    global board, playerTurn, armTurn, playerSymbol, armSymbol, filled
+
+    print(f"--- {len(marks)} mark(s) ---", flush=True)
+
+    amountFound = 0
+    row = None
+    col = None
+    legal = False
+
+    # first turn of the game
+    if filled == 0:
+        newLabel = None
+
+        for m in marks:
+            for i in range (3):
+                for j in range (3):
+                    if abs(m.x - board_coordinates[i][j][0]) < 25 and abs(m.y - board_coordinates[i][j][1]) < 25:
+                        amountFound += 1
+                        row = i
+                        col = j
+                        newLabel = m.label
+                        if amountFound == 1:
+                            legal = True
+                        else:
+                            legal = False
+
+        if legal:
+            board[row][col] = newLabel
+            playerSymbol = newLabel
+            if playerSymbol == "x":
+                armSymbol = "o"
+            else:
+                armSymbol = "x"
+
+
+    # not the first turn of the game
+    else:
+
+    # for m in marks:
+    #     print(f"  {m.label}  ({m.x:.0f}, {m.y:.0f})  conf {m.conf:.2f}")
 
 
 def draw(img: np.ndarray, marks: list[Mark]) -> np.ndarray:
@@ -406,8 +458,10 @@ def draw(img: np.ndarray, marks: list[Mark]) -> np.ndarray:
 def run_camera() -> None:
     import depthai as dai   # imported here so image mode works without a camera
 
+    global launch_time
+
     w, h = CAMERA_SIZE
-    last_print = 0.0
+    last_check = 0.0
     with dai.Pipeline() as pipeline:
         cam = pipeline.create(dai.node.Camera).build()
         out = cam.requestOutput((w, h), fps=CAMERA_FPS)
@@ -422,10 +476,14 @@ def run_camera() -> None:
             frame = msg.getCvFrame()
             marks = detect(frame)
             now = time.monotonic()
-            if now - last_print >= PRINT_EVERY_S:
-                last_print = now
-                print_marks(marks)
-            cv2.imshow("X / O detector", draw(frame, marks))
+
+            if time.time() - launch_time > 7.8:
+                if now - last_check >= GAP:
+                    last_check = now
+                    print_marks(marks)
+
+
+            cv2.imshow("Tic Tac Toe", draw(frame, marks))
             if cv2.waitKey(1) == ord("q"):
                 break
         pipeline.stop()
@@ -464,6 +522,7 @@ verySlow.max_acceleration_scaling_factor = 0.01
 # get in the position
 arm.go_to_joint_pose(PRE_CAMERA_POSITION, veryFast)
 arm.go_to_joint_pose(CAMERA_POSITION, verySlow)
+launch_time = time.time()
 
 def main() -> None:
     """Trains first if there are no weights yet, then runs image mode or the camera loop."""
