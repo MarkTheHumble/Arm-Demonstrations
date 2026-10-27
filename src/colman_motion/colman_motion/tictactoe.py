@@ -76,7 +76,7 @@ board_positions = [
 board_coordinates = [
     [(248, 758), (497, 746), (754, 758)],
     [(244, 509), (510, 506), (752, 511)],
-    [(261, 274), (484, 264), (750, 262)]
+    [(261, 274), (505, 264), (750, 262)]
 ]
 
 board = [[None for _ in range(3)] for _ in range(3)]
@@ -392,7 +392,7 @@ def detect(bgr: np.ndarray) -> list[Mark]:
 # --------------------------------------------------------------------------- #
 
 
-def print_marks(marks: list[Mark]) -> None:
+def scan_board(marks: list[Mark]) -> None:
 
     global board, playerTurn, armTurn, playerSymbol, armSymbol, filled
 
@@ -423,17 +423,19 @@ def print_marks(marks: list[Mark]) -> None:
         if legal:
             board[row][col] = newLabel
             playerSymbol = newLabel
+            filled += 1
             if playerSymbol == "x":
                 armSymbol = "o"
             else:
                 armSymbol = "x"
+            playerTurn = False
+            armTurn = True
+            print(f"row {row} col {col} \nplayer == {playerSymbol} arm == {armSymbol}\n filled: {filled}", flush= True)
 
 
     # not the first turn of the game
     else:
-
-    # for m in marks:
-    #     print(f"  {m.label}  ({m.x:.0f}, {m.y:.0f})  conf {m.conf:.2f}")
+        print("temp line")
 
 
 def draw(img: np.ndarray, marks: list[Mark]) -> np.ndarray:
@@ -451,6 +453,15 @@ def draw(img: np.ndarray, marks: list[Mark]) -> np.ndarray:
     cv2.line(out, (617, 880), (617, 129), (0, 255, 0), thickness)
     cv2.line(out, (132, 385), (870, 385), (0, 255, 0), thickness)
     cv2.line(out, (132, 623), (868, 623), (0, 255, 0), thickness)
+    cv2.circle(out, (248, 758), radius = 5, color = (0, 0, 255), thickness = -1)
+    cv2.circle(out, (497, 746), radius = 5, color = (0, 0, 255), thickness = -1)
+    cv2.circle(out, (754, 758), radius = 5, color = (0, 0, 255), thickness = -1)
+    cv2.circle(out, (244, 509), radius = 5, color = (0, 0, 255), thickness = -1)
+    cv2.circle(out, (510, 506), radius = 5, color = (0, 0, 255), thickness = -1)
+    cv2.circle(out, (752, 511), radius = 5, color = (0, 0, 255), thickness = -1)
+    cv2.circle(out, (261, 274), radius = 5, color = (0, 0, 255), thickness = -1)
+    cv2.circle(out, (505, 264), radius = 5, color = (0, 0, 255), thickness = -1)
+    cv2.circle(out, (750, 262), radius = 5, color = (0, 0, 255), thickness = -1)
     return out
 
 
@@ -458,7 +469,7 @@ def draw(img: np.ndarray, marks: list[Mark]) -> np.ndarray:
 def run_camera() -> None:
     import depthai as dai   # imported here so image mode works without a camera
 
-    global launch_time
+    global launch_time, playerTurn
 
     w, h = CAMERA_SIZE
     last_check = 0.0
@@ -478,10 +489,11 @@ def run_camera() -> None:
             now = time.monotonic()
 
             if time.time() - launch_time > 7.8:
-                if now - last_check >= GAP:
+                if now - last_check >= GAP and playerTurn == True:
                     last_check = now
-                    print_marks(marks)
-
+                    scan_board(marks)
+                elif armTurn == True:
+                    print("arm plays here" ,flush=True)
 
             cv2.imshow("Tic Tac Toe", draw(frame, marks))
             if cv2.waitKey(1) == ord("q"):
