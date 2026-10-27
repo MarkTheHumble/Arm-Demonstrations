@@ -154,6 +154,92 @@ def draw_circle(row, col):
     arm.go_to_joint_pose(CAMERA_POSITION, verySlow)
 
 
+# someone else figured out how to calculate the correct move
+def check_winner(board, armSymbol, playerSymbol):
+    for r in range(3):
+        if board[r][0] == board[r][1] == board[r][2] and board[r][0] is not None:
+            return board[r][0]
+    for c in range(3):
+        if board[0][c] == board[1][c] == board[2][c] and board[0][c] is not None:
+            return board[0][c]
+    if board[0][0] == board[1][1] == board[2][2] and board[0][0] is not None:
+        return board[0][0]
+    if board[0][2] == board[1][1] == board[2][0] and board[0][2] is not None:
+        return board[0][2]
+    
+    for r in range(3):
+        for c in range(3):
+            if board[r][c] is None:
+                return None  # Ongoing
+    return "Tie"
+
+def _minimax(board, depth, is_maximizing, armSymbol, playerSymbol):
+    winner = check_winner(board, armSymbol, playerSymbol)
+    if winner == armSymbol:
+        return 10 - depth
+    elif winner == playerSymbol:
+        return depth - 10
+    elif winner == "Tie":
+        return 0
+
+    if is_maximizing:
+        best_score = -float('inf')
+        for r in range(3):
+            for c in range(3):
+                if board[r][c] is None:
+                    board[r][c] = armSymbol
+                    score = _minimax(board, depth + 1, False, armSymbol, playerSymbol)
+                    board[r][c] = None
+                    best_score = max(best_score, score)
+        return best_score
+    else:
+        best_score = float('inf')
+        for r in range(3):
+            for c in range(3):
+                if board[r][c] is None:
+                    board[r][c] = playerSymbol
+                    score = _minimax(board, depth + 1, True, armSymbol, playerSymbol)
+                    board[r][c] = None
+                    best_score = min(best_score, score)
+        return best_score
+
+
+def armPlay():
+
+    global board, playerTurn, armTurn, playerSymbol, armSymbol, filled
+
+    best_score = -float('inf')
+    row = None
+    col = None
+
+    for r in range(3):
+        for c in range(3):
+            if board[r][c] is None:
+                # Try this move
+                board[r][c] = armSymbol
+                score = _minimax(board, 0, False, armSymbol, playerSymbol)
+                # Undo move
+                board[r][c] = None
+                
+                if score >= best_score:
+                    best_score = score
+                    row = r
+                    col = c
+
+
+    if playerSymbol == "x":
+        draw_circle(row, col)
+    else:
+        draw_circle(row, col)
+
+    board[row][col] = armSymbol
+    filled += 1
+    armTurn = False
+    playerTurn = True
+
+                    
+
+
 # claude generated vision model training
 # =========================================================================== #
 # SETTINGS - edit these by hand.  Nothing is read from the command line.
@@ -431,7 +517,7 @@ def scan_board(marks: list[Mark]) -> None:
             playerTurn = False
             armTurn = True
             print(f"row {row} col {col} \nplayer == {playerSymbol} arm == {armSymbol}\n filled: {filled}", flush= True)
-
+            print(board, flush=True)
 
     # not the first turn of the game
     else:
@@ -493,7 +579,7 @@ def run_camera() -> None:
                     last_check = now
                     scan_board(marks)
                 elif armTurn == True:
-                    print("arm plays here" ,flush=True)
+                    armPlay()
 
             cv2.imshow("Tic Tac Toe", draw(frame, marks))
             if cv2.waitKey(1) == ord("q"):
