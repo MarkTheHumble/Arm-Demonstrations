@@ -89,41 +89,49 @@ finished = False
 
 def checkForWinner():
 
-    global finished, board
+    global finished, board, arm, EE_DOWN, PRE_CAMERA_POSITION, CAMERA_POSITION, veryFast, verySlow, board_positions
+
+    point1 = None
+    point2 = None
 
     # horiztonal wins
     for i in range (3):
         if board[i][0] != None and board[i][0] == board[i][1] and board[i][0] == board[i][2]:
-            finished = True
-            # animation here
-            print("\n\n\n\n1",flush=True)
-            return
+            point1 = board_positions[i][0]
+            point2 = board_positions[i][2]
+            
 
     # vertical wins
     for i in range (3):
         if board[0][i] != None and board[0][i] == board[1][i] and board[0][i] == board[2][i]:
-            finished = True
-            # animation here
-            print("\n\n\n\n2",flush=True)
-            return
+            point1 = board_positions[0][i]
+            point2 = board_positions[2][i]
+            
 
     # diagnol wins
     if board[0][0] != None and board[0][0] == board[1][1] and board[0][0] == board[2][2]:
-        finished = True
-        # animation here
-        print("\n\n\n\n3",flush=True)
-        return
+        point1 = board_positions[0][0]
+        point2 = board_positions[2][2]
+
 
     if board[0][2] != None and board[0][2] == board[1][1] and board[0][2] == board[2][0]:
+        point1 = board_positions[0][2]
+        point2 = board_positions[2][0]        
+
+    # this is wrong
+    # I gotta extract the two coordinates seperately from each index        
+
+    if point1 != None:
         finished = True
-        # animation here
-        print("\n\n\n\n4",flush=True)
-        return
+
+        coordinates = [
+            point1, point2, 
+        ]
 
 
 def draw_x(row, col):
 
-    global arm, vacuum, EE_DOWN, PRE_CAMERA_POSITION, CAMERA_POSITION, veryFast, verySlow, board_positions
+    global arm, EE_DOWN, PRE_CAMERA_POSITION, CAMERA_POSITION, veryFast, verySlow, board_positions
 
     # first half
     x = board_positions[row][col][0] + 0.011
@@ -166,7 +174,7 @@ def draw_x(row, col):
 
 def draw_circle(row, col):
 
-    global arm, vacuum, EE_DOWN, PRE_CAMERA_POSITION, CAMERA_POSITION, veryFast, verySlow, board_positions
+    global arm, EE_DOWN, PRE_CAMERA_POSITION, CAMERA_POSITION, veryFast, verySlow, board_positions
 
     radius = 0.015
     for i in range(9):
