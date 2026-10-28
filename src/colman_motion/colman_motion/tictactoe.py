@@ -85,6 +85,41 @@ armTurn = False
 playerSymbol = None
 armSymbol = None
 filled = 0
+finished = False
+
+def checkForWinner():
+
+    global finished, board
+
+    # horiztonal wins
+    for i in range (3):
+        if board[i][0] != None and board[i][0] == board[i][1] and board[i][0] == board[i][2]:
+            finished = True
+            # animation here
+            print("\n\n\n\n1",flush=True)
+            return
+
+    # vertical wins
+    for i in range (3):
+        if board[0][i] != None and board[0][i] == board[1][i] and board[0][i] == board[2][i]:
+            finished = True
+            # animation here
+            print("\n\n\n\n2",flush=True)
+            return
+
+    # diagnol wins
+    if board[0][0] != None and board[0][0] == board[1][1] and board[0][0] == board[2][2]:
+        finished = True
+        # animation here
+        print("\n\n\n\n3",flush=True)
+        return
+
+    if board[0][2] != None and board[0][2] == board[1][1] and board[0][2] == board[2][0]:
+        finished = True
+        # animation here
+        print("\n\n\n\n4",flush=True)
+        return
+
 
 def draw_x(row, col):
 
@@ -230,7 +265,7 @@ def armPlay():
     if playerSymbol == "x":
         draw_circle(row, col)
     else:
-        draw_circle(row, col)
+        draw_x(row, col)
 
     board[row][col] = armSymbol
     filled += 1
@@ -521,7 +556,25 @@ def scan_board(marks: list[Mark]) -> None:
 
     # not the first turn of the game
     else:
-        print("temp line")
+        for m in marks:
+                    for i in range (3):
+                        for j in range (3):
+                            if abs(m.x - board_coordinates[i][j][0]) < 25 and abs(m.y - board_coordinates[i][j][1]) < 25 and m.label == playerSymbol and board[i][j] == None:
+                                amountFound += 1
+                                row = i
+                                col = j
+                                if amountFound == 1:
+                                    legal = True
+                                else:
+                                    legal = False
+
+        if legal:
+            board[row][col] = playerSymbol
+            filled += 1
+            playerTurn = False
+            armTurn = True
+            print(f"row {row} col {col} \nplayer == {playerSymbol} arm == {armSymbol}\n filled: {filled}", flush= True)
+            print(board, flush=True)
 
 
 def draw(img: np.ndarray, marks: list[Mark]) -> np.ndarray:
@@ -555,7 +608,7 @@ def draw(img: np.ndarray, marks: list[Mark]) -> np.ndarray:
 def run_camera() -> None:
     import depthai as dai   # imported here so image mode works without a camera
 
-    global launch_time, playerTurn
+    global launch_time, playerTurn, filled, finished
 
     w, h = CAMERA_SIZE
     last_check = 0.0
@@ -580,9 +633,10 @@ def run_camera() -> None:
                     scan_board(marks)
                 elif armTurn == True:
                     armPlay()
+                checkForWinner()
 
             cv2.imshow("Tic Tac Toe", draw(frame, marks))
-            if cv2.waitKey(1) == ord("q"):
+            if cv2.waitKey(1) == ord("q") or filled == 9 or finished:
                 break
         pipeline.stop()
     cv2.destroyAllWindows()
