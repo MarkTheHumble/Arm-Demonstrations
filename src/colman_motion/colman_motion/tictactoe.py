@@ -91,42 +91,70 @@ def checkForWinner():
 
     global finished, board, arm, EE_DOWN, PRE_CAMERA_POSITION, CAMERA_POSITION, veryFast, verySlow, board_positions
 
-    point1 = None
-    point2 = None
+    point1x = None
+    point1x = None        
+    point2x = None
+    point2y = None
+    point3x = None
+    point3y = None
 
     # horiztonal wins
     for i in range (3):
         if board[i][0] != None and board[i][0] == board[i][1] and board[i][0] == board[i][2]:
-            point1 = board_positions[i][0]
-            point2 = board_positions[i][2]
-            
+            point1x = board_positions[i][0][0]
+            point1y = board_positions[i][0][1]
+            point2x = board_positions[i][2][0]
+            point2y = board_positions[i][2][1]            
 
     # vertical wins
     for i in range (3):
         if board[0][i] != None and board[0][i] == board[1][i] and board[0][i] == board[2][i]:
-            point1 = board_positions[0][i]
-            point2 = board_positions[2][i]
+            point1x = board_positions[0][i][0]
+            point1y = board_positions[0][i][1]
+            point2x = board_positions[1][i][0]            
+            point2y = board_positions[1][i][1]
+            point3x = board_positions[2][i][0]            
+            point3y = board_positions[2][i][1]
             
 
     # diagnol wins
     if board[0][0] != None and board[0][0] == board[1][1] and board[0][0] == board[2][2]:
-        point1 = board_positions[0][0]
-        point2 = board_positions[2][2]
+        point1x = board_positions[0][0][0]
+        point2x = board_positions[2][2][0]
+        point1y = board_positions[0][0][1]
+        point2y = board_positions[2][2][1]
 
 
     if board[0][2] != None and board[0][2] == board[1][1] and board[0][2] == board[2][0]:
-        point1 = board_positions[0][2]
-        point2 = board_positions[2][0]        
+        point1x = board_positions[0][2][0]
+        point2x = board_positions[2][0][0]        
+        point1y = board_positions[0][2][1]
+        point2y = board_positions[2][0][1]        
 
-    # this is wrong
-    # I gotta extract the two coordinates seperately from each index        
 
-    if point1 != None:
+    if point1x != None:
+        z = 0.08506029111737157
         finished = True
 
         coordinates = [
-            point1, point2, 
+            point1x, point1y, z
         ]
+        arm.go_to_pose(*coordinates, *EE_DOWN, veryFast)
+
+        coordinates[0] = point2x
+        coordinates[1] = point2y
+
+        arm.go_to_pose(*coordinates, *EE_DOWN, veryFast)
+
+        if point3x != None:
+
+            coordinates[0] = point3x
+            coordinates[1] = point3y
+
+            arm.go_to_pose(*coordinates, *EE_DOWN, veryFast)
+
+        arm.go_to_joint_pose(PRE_CAMERA_POSITION, veryFast)
+        arm.go_to_joint_pose(CAMERA_POSITION, verySlow)
 
 
 def draw_x(row, col):
@@ -694,3 +722,7 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+scene.clear_scene()
+executor.shutdown()
+rclpy.shutdown()
