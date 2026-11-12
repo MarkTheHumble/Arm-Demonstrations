@@ -47,6 +47,15 @@ from rclpy.executors import MultiThreadedExecutor
 from colman_motion.arm_control import ArmControl
 from colman_motion.scene_manager import SceneManager
 
+STARTING_POSITION = {
+    "shoulder_pan_joint": 0 * (np.pi / 180),
+    "shoulder_lift_joint": -90 * (np.pi / 180),
+    "elbow_joint": 0 * (np.pi / 180),
+    "wrist_1_joint": -90 * (np.pi / 180),
+    "wrist_2_joint": 0 * (np.pi / 180),
+    "wrist_3_joint": 0 * (np.pi / 180),
+}
+
 PRE_CAMERA_POSITION = {
     "shoulder_pan_joint": 0.5 * (np.pi / 180),
     "shoulder_lift_joint": -120.5 * (np.pi / 180),
@@ -567,7 +576,7 @@ def scan_board(marks: list[Mark]) -> None:
         for m in marks:
             for i in range (3):
                 for j in range (3):
-                    if abs(m.x - board_coordinates[i][j][0]) < 25 and abs(m.y - board_coordinates[i][j][1]) < 25:
+                    if abs(m.x - board_coordinates[i][j][0]) < 35 and abs(m.y - board_coordinates[i][j][1]) < 35:
                         amountFound += 1
                         row = i
                         col = j
@@ -673,6 +682,7 @@ def run_camera() -> None:
 
             cv2.imshow("Tic Tac Toe", draw(frame, marks))
             if cv2.waitKey(1) == ord("q") or filled == 9 or finished:
+                arm.go_to_joint_pose(STARTING_POSITION, veryFast)
                 break
         pipeline.stop()
     cv2.destroyAllWindows()
