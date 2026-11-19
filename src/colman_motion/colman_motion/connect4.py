@@ -22,21 +22,21 @@ STARTING_POSITION = {
 }
 
 PRE_CAMERA_POSITION = {
-    "shoulder_pan_joint": 0.5 * (np.pi / 180),
-    "shoulder_lift_joint": -100.5 * (np.pi / 180),
-    "elbow_joint": 85.5 * (np.pi / 180),
-    "wrist_1_joint": -75.5 * (np.pi / 180),
-    "wrist_2_joint": -90.5 * (np.pi / 180),
-    "wrist_3_joint": 0.5 * (np.pi / 180),
+    "shoulder_pan_joint": 41.5 * (np.pi / 180),
+    "shoulder_lift_joint": -50.5 * (np.pi / 180),
+    "elbow_joint": 100.5 * (np.pi / 180),
+    "wrist_1_joint": -52.5 * (np.pi / 180),
+    "wrist_2_joint": -230.5 * (np.pi / 180),
+    "wrist_3_joint": 90.5 * (np.pi / 180),
 }
 
 CAMERA_POSITION = {
-    "shoulder_pan_joint": 0 * (np.pi / 180),
-    "shoulder_lift_joint": -100 * (np.pi / 180),
-    "elbow_joint": 85 * (np.pi / 180),
-    "wrist_1_joint": -75 * (np.pi / 180),
-    "wrist_2_joint": -90 * (np.pi / 180),
-    "wrist_3_joint": 0 * (np.pi / 180),
+    "shoulder_pan_joint": 41 * (np.pi / 180),
+    "shoulder_lift_joint": -50 * (np.pi / 180),
+    "elbow_joint": 100 * (np.pi / 180),
+    "wrist_1_joint": -52 * (np.pi / 180),
+    "wrist_2_joint": -230 * (np.pi / 180),
+    "wrist_3_joint": 90 * (np.pi / 180),
 }
 
 # I think a square image looks better here
@@ -736,7 +736,7 @@ verySlow.max_acceleration_scaling_factor = 0.01
 vacuum.release()
 
 # get in the position
-# arm.go_to_joint_pose(STARTING_POSITION, veryFast) # if I ever wanna reset the arm position from the computer instead
+arm.go_to_joint_pose(STARTING_POSITION, veryFast) # if I ever wanna reset the arm position from the computer instead
 arm.go_to_joint_pose(PRE_CAMERA_POSITION, veryFast)
 arm.go_to_joint_pose(CAMERA_POSITION, verySlow)
 launchTime = time.time()
@@ -797,8 +797,8 @@ with dai.Pipeline() as pipeline:
 
         cv2.imshow("Connect4", frame)
 
-        # exit conditions
-        if cv2.waitKey(1) == ord("q") or (settingUp == False and (len(armPieces) == 0 or len(playerPieces) == 0)):
+        # exit condition
+        if cv2.waitKey(1) == ord("q"):
             arm.go_to_joint_pose(STARTING_POSITION, slow)
             cv2.destroyAllWindows()
             vacuum.release()
