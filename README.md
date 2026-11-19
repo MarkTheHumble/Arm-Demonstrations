@@ -1,6 +1,6 @@
 # Arm Demonstrations for UR3e arm, MRRP lab
 
-This branch currently just has checkers as an option. Other games could possibly be added in other branches.
+This branch currently just has connect4 as an option. Other games could possibly be added in other branches.
 
 ## Instructions:
 
@@ -57,7 +57,7 @@ You should see RViz appear. If the arm on your screen is in a different position
 inside of a different shell, with the shell that performed "pixi run lan" still running,
 
 ```
-pixi run checkers
+pixi run connect4
 ```
 
 Spend the first 6.5 seconds of the game aligning the 8x6 board with the temporary red lines that should be going through the vertical and horizontal centers of the checkers board. The game is currently expecting blue pieces on the arm side and pink pieces on the players side.

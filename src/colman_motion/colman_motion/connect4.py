@@ -799,7 +799,7 @@ with dai.Pipeline() as pipeline:
 
         # exit conditions
         if cv2.waitKey(1) == ord("q") or (settingUp == False and (len(armPieces) == 0 or len(playerPieces) == 0)):
-            arm.go_to_joint_pose(STARTING_POSITION, verySlow)
+            arm.go_to_joint_pose(STARTING_POSITION, slow)
             cv2.destroyAllWindows()
             vacuum.release()
             scene.clear_scene()
