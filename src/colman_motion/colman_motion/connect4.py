@@ -795,14 +795,15 @@ with dai.Pipeline() as pipeline:
         else:
             cv2.rectangle(frame, botCorner, topCorner, (0, 255, 0), 2)
 
-        cv2.imshow("Checkers", frame)
+        cv2.imshow("Connect4", frame)
 
         # exit conditions
         if cv2.waitKey(1) == ord("q") or (settingUp == False and (len(armPieces) == 0 or len(playerPieces) == 0)):
+            arm.go_to_joint_pose(STARTING_POSITION, verySlow)
+            cv2.destroyAllWindows()
+            vacuum.release()
+            scene.clear_scene()
+            executor.shutdown()
+            rclpy.shutdown()
             break
 
-cv2.destroyAllWindows()
-vacuum.release()
-scene.clear_scene()
-executor.shutdown()
-rclpy.shutdown()

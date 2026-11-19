@@ -12,7 +12,7 @@ setup(
         (
             "share/" + package_name + "/launch",
             [
-                "colman_motion/checkers.launch.py",
+                "colman_motion/connect4.launch.py",
              ],
         ),
     ],
@@ -29,7 +29,7 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "checkers = colman_motion.checkers:main"
+            "connect4 = colman_motion.connect4:main"
         ],
     },
 )

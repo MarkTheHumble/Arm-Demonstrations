@@ -34,7 +34,7 @@ def generate_launch_description():
         .to_moveit_configs()
     )
 
-    checkers_node = Node(
+    connect4_node = Node(
         name="moveit_py",
         package="colman_motion",
         executable=demo,
@@ -48,7 +48,7 @@ def generate_launch_description():
     return LaunchDescription(
         [
             DeclareLaunchArgument("gripper_type", default_value="vacuum"),
-            DeclareLaunchArgument("demo", default_value="checkers"),
-            checkers_node,
+            DeclareLaunchArgument("demo", default_value="connect4"),
+            connect4_node,
         ]
     )
