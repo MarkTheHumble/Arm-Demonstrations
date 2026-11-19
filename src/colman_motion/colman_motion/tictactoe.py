@@ -728,11 +728,12 @@ def main() -> None:
         print(f"{WEIGHTS_PATH} not found - downloading EMNIST and training (one time only)...")
         train()
     run_camera()
+    arm.go_to_joint_pose(STARTING_POSITION, veryFast)
+    print("MAIN BROKEN\n\n\n",flush=True)
+    scene.clear_scene()
+    executor.shutdown()
+    rclpy.shutdown()
 
 
 if __name__ == "__main__":
     main()
-
-scene.clear_scene()
-executor.shutdown()
-rclpy.shutdown()
